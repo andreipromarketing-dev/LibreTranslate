@@ -56,6 +56,31 @@ document.addEventListener('DOMContentLoaded', function(){
             saveDirectoryError: "",
             lastTranslatedFileUrl: "",
 
+            // Abbreviation & Glossary
+            showTab: 'translate',  // 'translate' | 'abbreviations' | 'glossary' | 'settings'
+            abbreviations: [],
+            glossary: [],
+            availableLangs: [],
+            
+            // Abbreviation modal
+            abbrModalOpen: false,
+            editingAbbr: null,
+            abbrForm: { abbreviation: '', expansion: '', case_sensitive: false },
+            
+            // Glossary modal
+            glossaryModalOpen: false,
+            editingGlossary: null,
+            glossaryForm: { 
+                source_term: '', target_term: '', 
+                source_lang: 'en', target_lang: 'ru',
+                case_sensitive: false, context: '' 
+            },
+            
+            // JSON Import
+            jsonImportMode: { abbr: false, glossary: false },
+            jsonDragOver: { abbr: false, glossary: false },
+            jsonPasteText: { abbr: '', glossary: '' },
+
             apiSecret: "{{ bogus_api_secret }}"
         },
         mounted: function() {
@@ -877,6 +902,280 @@ document.addEventListener('DOMContentLoaded', function(){
         }
     });
 });
+
+// === ABBREVIATION & GLOSSARY METHODS ===
+
+loadTabData: function() {
+    if (this.showTab === 'abbreviations') this.loadAbbreviations();
+    else if (this.showTab === 'glossary') this.loadGlossary();
+    else if (this.showTab === 'settings') this.loadSettings();
+},
+
+// === ABBREVIATIONS ===
+loadAbbreviations: function() {
+    let self = this;
+    fetch(BaseUrl + "/abbreviations")
+        .then(r => r.json())
+        .then(data => { self.abbreviations = data; })
+        .catch(() => handleNotification("Error", "{{ _h('Failed to load abbreviations') }}"));
+},
+
+openAbbrModal: function(entry) {
+    if (entry) {
+        this.editingAbbr = entry;
+        this.abbrForm = { 
+            abbreviation: entry.abbreviation, 
+            expansion: entry.expansion, 
+            case_sensitive: entry.case_sensitive 
+        };
+    } else {
+        this.editingAbbr = null;
+        this.abbrForm = { abbreviation: '', expansion: '', case_sensitive: false };
+    }
+    this.abbrModalOpen = true;
+},
+
+closeAbbrModal: function() {
+    this.abbrModalOpen = false;
+    this.editingAbbr = null;
+    this.abbrForm = { abbreviation: '', expansion: '', case_sensitive: false };
+},
+
+saveAbbr: function() {
+    let self = this;
+    if (!self.abbrForm.abbreviation || !self.abbrForm.expansion) return;
+    
+    let url = self.editingAbbr 
+        ? BaseUrl + "/abbreviations/" + self.editingAbbr.id
+        : BaseUrl + "/abbreviations";
+    let method = self.editingAbbr ? "PUT" : "POST";
+    
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(self.abbrForm)
+    }).then(r => {
+        if (r.ok) {
+            self.closeAbbrModal();
+            self.loadAbbreviations();
+            handleNotification("Success", self.editingAbbr ? "{{ _e('Abbreviation updated') }}" : "{{ _e('Abbreviation added') }}");
+        } else {
+            handleNotification("Error", "{{ _e('Failed to save') }}");
+        }
+    });
+},
+
+deleteAbbr: function(entry) {
+    if (!confirm("{{ _e('Delete this abbreviation?') }}")) return;
+    let self = this;
+    fetch(BaseUrl + "/abbreviations/" + entry.id, { method: "DELETE" })
+        .then(r => { if (r.ok) { self.loadAbbreviations(); handleNotification("Success", "{{ _e('Abbreviation deleted') }}"); } });
+},
+
+confirmClearAbbr: function() {
+    if (!confirm("{{ _e('Delete ALL abbreviations? This cannot be undone.') }}")) return;
+    let self = this;
+    fetch(BaseUrl + "/abbreviations/clear", { method: "POST" })
+        .then(r => { if (r.ok) { self.loadAbbreviations(); handleNotification("Success", "{{ _e('All abbreviations cleared') }}"); } });
+},
+
+exportAbbreviationsCSV: function() { window.location.href = BaseUrl + "/abbreviations/export"; },
+exportAbbreviationsJSON: function() { window.location.href = BaseUrl + "/abbreviations/export/json"; },
+
+copyAbbrInstruction: function() {
+    let instruction = `...`; // см. markdown выше
+    navigator.clipboard.writeText(instruction).then(() => {
+        handleNotification("Copied", "{{ _h('JSON instruction copied to clipboard') }}");
+    }).catch(() => {
+        let ta = document.createElement('textarea');
+        ta.value = instruction;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        handleNotification("Copied", "{{ _h('JSON instruction copied to clipboard') }}");
+    });
+},
+
+// JSON Import для аббревиатур
+onDragOver: function(e, type) { e.preventDefault(); this.jsonDragOver[type] = true; },
+onDragLeave: function(e, type) { e.preventDefault(); this.jsonDragOver[type] = false; },
+onJsonDrop: function(e, type) { 
+    e.preventDefault(); 
+    this.jsonDragOver[type] = false; 
+    let file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/json') this.processJsonFile(file, type);
+},
+
+onJsonFileSelect: function(e, type) {
+    let file = e.target.files[0];
+    if (file) this.processJsonFile(file, type);
+},
+
+processJsonFile: function(file, type) {
+    let reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            let data = JSON.parse(e.target.result);
+            this.importJsonData(data, type);
+        } catch (err) {
+            handleNotification("Error", "{{ _h('Invalid JSON file') }}");
+        }
+    };
+    reader.readAsText(file);
+},
+
+onJsonPaste: function(e, type) {
+    let text = e.clipboardData.getData('text');
+    if (text.trim().startsWith('{')) this.jsonPasteText[type] = text;
+},
+
+importFromPaste: function(type) {
+    try {
+        let data = JSON.parse(this.jsonPasteText[type]);
+        this.importJsonData(data, type);
+        this.cancelJsonImport(type);
+    } catch (e) { handleNotification("Error", "{{ _h('Invalid JSON format') }}"); }
+},
+
+importJsonData: function(data, type) {
+    let url = type === 'abbr' ? "/abbreviations/import/json" : "/glossary/import/json";
+    fetch(BaseUrl + url, {
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: data.entries, skip_existing: true })
+    }).then(r => r.json()).then(res => {
+        if (type === 'abbr') this.loadAbbreviations(); else this.loadGlossary();
+        handleNotification("Success", "{{ _h('Imported') }}: " + res.added + ", " + "{{ _h('skipped') }}: " + res.skipped);
+    });
+},
+
+cancelJsonImport: function(type) {
+    this.jsonImportMode[type] = false;
+    this.jsonPasteText[type] = '';
+    this.$refs[type + 'JsonFile'].value = '';
+},
+
+importFileClick: function(ref) { this.$refs[ref].click(); },
+
+importAbbreviationsCSV: function(e) {
+    let self = this;
+    let file = e.target.files[0];
+    if (!file) return;
+    let formData = new FormData();
+    formData.append("file", file);
+    formData.append("skip_existing", "true");
+    fetch(BaseUrl + "/abbreviations/import", { method: "POST", body: formData })
+        .then(r => r.json()).then(res => {
+            self.loadAbbreviations();
+            handleNotification("Success", "{{ _h('Imported') }}: " + res.added + ", " + "{{ _h('skipped') }}: " + res.skipped);
+        });
+    e.target.value = '';
+},
+
+importGlossaryCSV: function(e) {
+    let self = this;
+    let file = e.target.files[0];
+    if (!file) return;
+    let formData = new FormData();
+    formData.append("file", file);
+    formData.append("skip_existing", "true");
+    fetch(BaseUrl + "/glossary/import", { method: "POST", body: formData })
+        .then(r => r.json()).then(res => {
+            self.loadGlossary();
+            handleNotification("Success", "{{ _h('Imported') }}: " + res.added + ", " + "{{ _h('skipped') }}: " + res.skipped);
+        });
+    e.target.value = '';
+},
+
+// GLOSSARY METHODS
+loadGlossary: function() {
+    let self = this;
+    fetch(BaseUrl + "/glossary")
+        .then(r => r.json())
+        .then(data => { self.glossary = data; })
+        .catch(() => handleNotification("Error", "{{ _h('Failed to load glossary') }}"));
+},
+
+openGlossaryModal: function(entry) {
+    if (entry) {
+        this.editingGlossary = entry;
+        this.glossaryForm = { 
+            source_term: entry.source_term, target_term: entry.target_term,
+            source_lang: entry.source_lang, target_lang: entry.target_lang,
+            case_sensitive: entry.case_sensitive, context: entry.context || ''
+        };
+    } else {
+        this.editingGlossary = null;
+        this.glossaryForm = { source_term: '', target_term: '', 
+            source_lang: 'en', target_lang: 'ru', case_sensitive: false, context: '' };
+    }
+    this.glossaryModalOpen = true;
+},
+
+closeGlossaryModal: function() {
+    this.glossaryModalOpen = false;
+    this.editingGlossary = null;
+    this.glossaryForm = { source_term: '', target_term: '', 
+        source_lang: 'en', target_lang: 'ru', case_sensitive: false, context: '' };
+},
+
+saveGlossary: function() {
+    let self = this;
+    if (!self.glossaryForm.source_term || !self.glossaryForm.target_term || 
+        !self.glossaryForm.source_lang || !self.glossaryForm.target_lang) return;
+    
+    let url = self.editingGlossary ? BaseUrl + "/glossary/" + self.editingGlossary.id : BaseUrl + "/glossary";
+    let method = self.editingGlossary ? "PUT" : "POST";
+    
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(self.glossaryForm)
+    }).then(r => {
+        if (r.ok) {
+            self.closeGlossaryModal();
+            self.loadGlossary();
+            handleNotification("Success", self.editingGlossary ? "{{ _e('Terminology updated') }}" : "{{ _e('Terminology added') }}");
+        } else {
+            handleNotification("Error", "{{ _e('Failed to save') }}");
+        }
+    });
+},
+
+deleteGlossary: function(entry) {
+    if (!confirm("{{ _e('Delete this terminology entry?') }}")) return;
+    let self = this;
+    fetch(BaseUrl + "/glossary/" + entry.id, { method: "DELETE" })
+        .then(r => { if (r.ok) { self.loadGlossary(); handleNotification("Success", "{{ _e('Terminology deleted') }}"); } });
+},
+
+confirmClearGlossary: function() {
+    if (!confirm("{{ _e('Delete ALL terminology? This cannot be undone.') }}")) return;
+    let self = this;
+    fetch(BaseUrl + "/glossary/clear", { method: "POST" })
+        .then(r => { if (r.ok) { self.loadGlossary(); handleNotification("Success", "{{ _e('All terminology cleared') }}"); } });
+},
+
+exportGlossaryCSV: function() { window.location.href = BaseUrl + "/glossary/export"; },
+exportGlossaryJSON: function() { window.location.href = BaseUrl + "/glossary/export/json"; },
+
+copyGlossaryInstruction: function() {
+    let instruction = `...`; // промпт для глоссария
+    navigator.clipboard.writeText(instruction).then(() => {
+        handleNotification("Copied", "{{ _h('JSON instruction copied to clipboard') }}");
+    });
+},
+
+// === GLOSSARY JSON IMPORT ===
+importGlossaryJsonFile: function(e) {
+    let file = e.target.files[0];
+    if (file) this.processJsonFile(file, 'glossary');
+},
+
+importGlossaryJson: function() {
+    this.jsonImportMode.glossary = true;
+},
 
 /**
  * @param {object} self

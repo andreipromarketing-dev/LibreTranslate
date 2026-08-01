@@ -6,6 +6,8 @@ import argostranslatefiles
 from argostranslate.translate import ITranslation
 
 from libretranslate import pdf_file, text_file
+from libretranslate.abbreviations import get_abbreviation_processor
+from libretranslate.glossary import get_glossary_processor
 
 
 class JobCancelledError(Exception):
@@ -142,11 +144,25 @@ class ProgressTranslation(ITranslation):
         paragraphs = ITranslation.split_into_paragraphs(input_text)
 
         translated = []
+        abbr_processor = get_abbreviation_processor()
+        glossary_processor = get_glossary_processor()
         for paragraph in paragraphs:
             self._wait_if_paused()
             if self.job.cancel_event.is_set():
                 raise JobCancelledError()
-            translated.append(self.underlying.translate(paragraph))
+
+            # Pre-processing: expand abbreviations
+            processed_paragraph = abbr_processor.expand(paragraph)
+
+            # Get glossary for this language pair
+            glossary = glossary_processor.get_glossary(self.from_lang, self.to_lang)
+
+            if glossary:
+                translated_text = self.underlying.translate_with_glossary(processed_paragraph, glossary)
+            else:
+                translated_text = self.underlying.translate(processed_paragraph)
+
+            translated.append(translated_text)
             with job_store._lock:
                 self.job.processed_chars += len(paragraph)
                 if self.job.total_chars > 0:

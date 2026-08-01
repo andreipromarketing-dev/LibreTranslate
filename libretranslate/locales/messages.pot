@@ -897,3 +897,139 @@ msgstr ""
 #: libretranslate/templates/app.js.template:775
 msgid "and saved to"
 msgstr ""
+
+# Abbreviations
+msgid "Abbreviations"
+msgstr ""
+
+msgid "Abbreviation Dictionary"
+msgstr ""
+
+msgid "Abbreviation"
+msgstr ""
+
+msgid "Expansion"
+msgstr ""
+
+msgid "Case Sensitive"
+msgstr ""
+
+msgid "Add Abbreviation"
+msgstr ""
+
+msgid "Edit Abbreviation"
+msgstr ""
+
+msgid "Delete this abbreviation?"
+msgstr ""
+
+msgid "No abbreviations yet. Click Add to create one."
+msgstr ""
+
+msgid "Abbreviation added"
+msgstr ""
+
+msgid "Abbreviation updated"
+msgstr ""
+
+msgid "Abbreviation deleted"
+msgstr ""
+
+msgid "All abbreviations cleared"
+msgstr ""
+
+msgid "Delete ALL abbreviations? This cannot be undone."
+msgstr ""
+
+# Glossary
+msgid "Terminology"
+msgstr ""
+
+msgid "Glossary"
+msgstr ""
+
+msgid "Source Term"
+msgstr ""
+
+msgid "Target Term"
+msgstr ""
+
+msgid "Source Language"
+msgstr ""
+
+msgid "Target Language"
+msgstr ""
+
+msgid "Context"
+msgstr ""
+
+msgid "Add Terminology"
+msgstr ""
+
+msgid "Edit Terminology"
+msgstr ""
+
+msgid "Delete this terminology entry?"
+msgstr ""
+
+msgid "No terminology entries yet. Click Add to create one."
+msgstr ""
+
+msgid "Terminology added"
+msgstr ""
+
+msgid "Terminology updated"
+msgstr ""
+
+msgid "Terminology deleted"
+msgstr ""
+
+msgid "All terminology cleared"
+msgstr ""
+
+msgid "Delete ALL terminology? This cannot be undone."
+msgstr ""
+
+# Import/Export
+msgid "Export CSV"
+msgstr ""
+
+msgid "Export JSON"
+msgstr ""
+
+msgid "Import CSV"
+msgstr ""
+
+msgid "Import JSON"
+msgstr ""
+
+msgid "Copy JSON Instruction"
+msgstr ""
+
+msgid "JSON instruction copied to clipboard"
+msgstr ""
+
+msgid "Drag JSON file here or click to select"
+msgstr ""
+
+msgid "Or paste JSON below"
+msgstr ""
+
+msgid "Import from Paste"
+msgstr ""
+
+msgid "Invalid JSON format"
+msgstr ""
+
+msgid "Imported"
+msgstr ""
+
+msgid "skipped"
+msgstr ""
+
+# Common
+msgid "Yes"
+msgstr ""
+
+msgid "No"
+msgstr ""

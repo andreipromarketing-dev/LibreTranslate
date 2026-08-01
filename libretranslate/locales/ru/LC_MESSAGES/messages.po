@@ -906,6 +906,186 @@ msgstr "Сохранить перевод как..."
 msgid "and saved to"
 msgstr "и сохранен в"
 
+# Abbreviations
+#: libretranslate/templates/index.html:XXX
+msgid "Abbreviations"
+msgstr "Аббревиатуры"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Abbreviation Dictionary"
+msgstr "Словарь аббревиатур"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Abbreviation"
+msgstr "Аббревиатура"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Expansion"
+msgstr "Расшифровка"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Case Sensitive"
+msgstr "Учитывать регистр"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Add Abbreviation"
+msgstr "Добавить аббревиатуру"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Edit Abbreviation"
+msgstr "Редактировать аббревиатуру"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Delete this abbreviation?"
+msgstr "Удалить эту аббревиатуру?"
+
+#: libretranslate/templates/index.html:XXX
+msgid "No abbreviations yet. Click Add to create one."
+msgstr "Аббревиатур пока нет. Нажмите «Добавить», чтобы создать."
+
+#: libretranslate/templates/index.html:XXX
+msgid "Abbreviation added"
+msgstr "Аббревиатура добавлена"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Abbreviation updated"
+msgstr "Аббревиатура обновлена"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Abbreviation deleted"
+msgstr "Аббревиатура удалена"
+
+#: libretranslate/templates/index.html:XXX
+msgid "All abbreviations cleared"
+msgstr "Все аббревиатуры удалены"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Delete ALL abbreviations? This cannot be undone."
+msgstr "Удалить ВСЕ аббревиатуры? Это нельзя отменить."
+
+# Glossary
+#: libretranslate/templates/index.html:XXX
+msgid "Terminology"
+msgstr "Терминология"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Glossary"
+msgstr "Глоссарий"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Source Term"
+msgstr "Исходный термин"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Target Term"
+msgstr "Целевой термин"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Source Language"
+msgstr "Язык источника"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Target Language"
+msgstr "Язык цели"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Context"
+msgstr "Контекст"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Add Terminology"
+msgstr "Добавить термин"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Edit Terminology"
+msgstr "Редактировать термин"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Delete this terminology entry?"
+msgstr "Удалить этот термин?"
+
+#: libretranslate/templates/index.html:XXX
+msgid "No terminology entries yet. Click Add to create one."
+msgstr "Терминов пока нет. Нажмите «Добавить», чтобы создать."
+
+#: libretranslate/templates/index.html:XXX
+msgid "Terminology added"
+msgstr "Термин добавлен"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Terminology updated"
+msgstr "Термин обновлен"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Terminology deleted"
+msgstr "Термин удален"
+
+#: libretranslate/templates/index.html:XXX
+msgid "All terminology cleared"
+msgstr "Вся терминология удалена"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Delete ALL terminology? This cannot be undone."
+msgstr "Удалить ВСЮ терминологию? Это нельзя отменить."
+
+# Import/Export
+#: libretranslate/templates/index.html:XXX
+msgid "Export CSV"
+msgstr "Экспорт CSV"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Export JSON"
+msgstr "Экспорт JSON"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Import CSV"
+msgstr "Импорт CSV"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Import JSON"
+msgstr "Импорт JSON"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Copy JSON Instruction"
+msgstr "Скопировать JSON инструкцию"
+
+#: libretranslate/templates/index.html:XXX
+msgid "JSON instruction copied to clipboard"
+msgstr "JSON инструкция скопирована в буфер обмена"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Drag JSON file here or click to select"
+msgstr "Перетащите JSON файл сюда или нажмите для выбора"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Or paste JSON below"
+msgstr "Или вставьте JSON ниже"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Import from Paste"
+msgstr "Импорт из буфера"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Invalid JSON format"
+msgstr "Неверный формат JSON"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Imported"
+msgstr "Импортировано"
+
+#: libretranslate/templates/index.html:XXX
+msgid "skipped"
+msgstr "пропущено"
+
+# Common
+#: libretranslate/templates/index.html:XXX
+msgid "Yes"
+msgstr "Да"
+
+#: libretranslate/templates/index.html:XXX
+msgid "No"
+msgstr "Нет"
+
 #: libretranslate/templates/index.html:355
 #, python-format
 msgid "Made with %(heart)s by %(contributors)s and powered by %(engine)s"

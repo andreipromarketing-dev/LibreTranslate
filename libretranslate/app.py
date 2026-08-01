@@ -36,6 +36,15 @@ from libretranslate.locales import (
     lazy_swag,
 )
 from libretranslate.progress import ProgressTranslation, job_store
+from dataclasses import asdict
+from libretranslate.abbreviations import (
+    get_abbreviation_store, get_abbreviation_processor,
+    export_to_csv, import_from_csv
+)
+from libretranslate.glossary import (
+    get_glossary_store, get_glossary_processor,
+    export_glossary_csv, import_glossary_csv
+)
 
 from .api_keys import Database, RemoteDatabase
 from .suggestions import Database as SuggestionsDatabase
@@ -206,6 +215,15 @@ def create_app(args):
     language_pairs = {}
     for lang in languages:
         language_pairs[lang.code] = sorted([l.to_lang.code for l in lang.translations_from])
+
+    # Initialize abbreviation & glossary stores
+    get_abbreviation_store()
+    get_abbreviation_processor()
+    get_glossary_store()
+    get_glossary_processor()
+    import logging
+    logging.info("[ABBR] Abbreviation dictionary initialized")
+    logging.info("[GLOSS] Glossary initialized")
 
     # Map userdefined frontend languages to argos language object.
     if args.frontend_language_source == "auto":
@@ -1801,6 +1819,232 @@ def create_app(args):
 
         SuggestionsDatabase().add(q, s, source_lang, target_lang)
         return jsonify({"success": True})
+
+    # === ABBREVIATIONS API ===
+
+    @bp.get("/abbreviations")
+    @access_check
+    def list_abbreviations():
+        store = get_abbreviation_store()
+        return jsonify([asdict(e) for e in store.list_all()])
+
+    @bp.post("/abbreviations")
+    @access_check
+    def create_abbreviation():
+        data = request.get_json()
+        if not data:
+            abort(400, description=_("Invalid JSON"))
+        abbr = data.get('abbreviation', '').strip()
+        exp = data.get('expansion', '').strip()
+        case_sens = bool(data.get('case_sensitive', False))
+        if not abbr or not exp:
+            abort(400, description=_("Abbreviation and expansion required"))
+        store = get_abbreviation_store()
+        entry = store.create(abbr, exp, case_sens)
+        get_abbreviation_processor().reload()
+        return jsonify(asdict(entry)), 201
+
+    @bp.put("/abbreviations/<int:entry_id>")
+    @access_check
+    def update_abbreviation(entry_id: int):
+        data = request.get_json()
+        if not data: abort(400, description=_("Invalid JSON"))
+        abbr = data.get('abbreviation', '').strip()
+        exp = data.get('expansion', '').strip()
+        case_sens = bool(data.get('case_sensitive', False))
+        if not abbr or not exp: abort(400, description=_("Required fields missing"))
+        store = get_abbreviation_store()
+        entry = store.update(entry_id, abbr, exp, case_sens)
+        if not entry: abort(404, description=_("Not found"))
+        get_abbreviation_processor().reload()
+        return jsonify(asdict(entry))
+
+    @bp.delete("/abbreviations/<int:entry_id>")
+    @access_check
+    def delete_abbreviation(entry_id: int):
+        store = get_abbreviation_store()
+        if not store.delete(entry_id): abort(404, description=_("Not found"))
+        get_abbreviation_processor().reload()
+        return jsonify({"success": True})
+
+    @bp.post("/abbreviations/clear")
+    @access_check
+    def clear_abbreviations():
+        store = get_abbreviation_store()
+        count = store.clear_all()
+        get_abbreviation_processor().reload()
+        return jsonify({"cleared": count})
+
+    @bp.get("/abbreviations/export")
+    @access_check
+    def export_abbreviations_csv():
+        from flask import Response
+        csv_content = export_to_csv(get_abbreviation_store())
+        return Response(csv_content, mimetype='text/csv',
+                        headers={'Content-Disposition': 'attachment; filename=abbreviations.csv'})
+
+    @bp.get("/abbreviations/export/json")
+    @access_check
+    def export_abbreviations_json():
+        from flask import Response
+        store = get_abbreviation_store()
+        data = {'version': 1, 'updated_at': datetime.utcnow().isoformat() + 'Z',
+                'entries': [asdict(e) for e in store.list_all()]}
+        return Response(json.dumps(data, ensure_ascii=False, indent=2),
+                        mimetype='application/json',
+                        headers={'Content-Disposition': 'attachment; filename=abbreviations.json'})
+
+    @bp.post("/abbreviations/import")
+    @access_check
+    def import_abbreviations_csv():
+        if 'file' not in request.files: abort(400, description=_("No file"))
+        file = request.files['file']
+        skip = request.form.get('skip_existing', 'true').lower() == 'true'
+        csv_content = file.read().decode('utf-8')
+        store = get_abbreviation_store()
+        added, skipped = import_from_csv(store, csv_content, skip)
+        get_abbreviation_processor().reload()
+        return jsonify({"added": added, "skipped": skipped, "total": added + skipped})
+
+    @bp.post("/abbreviations/import/json")
+    @access_check
+    def import_abbreviations_json():
+        data = request.get_json()
+        if not data or 'entries' not in data: abort(400, description=_("Invalid JSON"))
+        store = get_abbreviation_store()
+        added = skipped = 0
+        existing = {e.abbreviation.lower() for e in store.list_all()}
+        for e in data['entries']:
+            abbr = e.get('abbreviation', '').strip()
+            exp = e.get('expansion', '').strip()
+            case_sens = bool(e.get('case_sensitive', False))
+            if not abbr or not exp: continue
+            if abbr.lower() in existing:
+                skipped += 1; continue
+            store.create(abbr, exp, case_sens)
+            added += 1
+        get_abbreviation_processor().reload()
+        return jsonify({"added": added, "skipped": skipped, "total": added + skipped})
+
+    # === GLOSSARY API ===
+
+    @bp.get("/glossary")
+    @access_check
+    def list_glossary():
+        store = get_glossary_store()
+        src_lang = request.args.get('source_lang')
+        tgt_lang = request.args.get('target_lang')
+        if src_lang and tgt_lang:
+            entries = store.list_for_pair(src_lang, tgt_lang)
+        else:
+            entries = store.list_all()
+        return jsonify([asdict(e) for e in entries])
+
+    @bp.post("/glossary")
+    @access_check
+    def create_glossary():
+        data = request.get_json()
+        if not data: abort(400, description=_("Invalid JSON"))
+        src = data.get('source_term', '').strip()
+        tgt = data.get('target_term', '').strip()
+        src_lang = data.get('source_lang', '').strip()
+        tgt_lang = data.get('target_lang', '').strip()
+        case_sens = bool(data.get('case_sensitive', False))
+        context = data.get('context', '').strip()
+        if not all([src, tgt, src_lang, tgt_lang]):
+            abort(400, description=_("All fields required"))
+        store = get_glossary_store()
+        entry = store.create(src, tgt, src_lang, tgt_lang, case_sens, context)
+        get_glossary_processor().reload()
+        return jsonify(asdict(entry)), 201
+
+    @bp.put("/glossary/<int:entry_id>")
+    @access_check
+    def update_glossary(entry_id: int):
+        data = request.get_json()
+        if not data: abort(400)
+        src = data.get('source_term', '').strip()
+        tgt = data.get('target_term', '').strip()
+        src_lang = data.get('source_lang', '').strip()
+        tgt_lang = data.get('target_lang', '').strip()
+        case_sens = bool(data.get('case_sensitive', False))
+        context = data.get('context', '').strip()
+        if not all([src, tgt, src_lang, tgt_lang]): abort(400)
+        store = get_glossary_store()
+        entry = store.update(entry_id, src, tgt, src_lang, tgt_lang, case_sens, context)
+        if not entry: abort(404)
+        get_glossary_processor().reload()
+        return jsonify(asdict(entry))
+
+    @bp.delete("/glossary/<int:entry_id>")
+    @access_check
+    def delete_glossary(entry_id: int):
+        store = get_glossary_store()
+        if not store.delete(entry_id): abort(404)
+        get_glossary_processor().reload()
+        return jsonify({"success": True})
+
+    @bp.post("/glossary/clear")
+    @access_check
+    def clear_glossary():
+        store = get_glossary_store()
+        count = store.clear_all()
+        get_glossary_processor().reload()
+        return jsonify({"cleared": count})
+
+    @bp.get("/glossary/export")
+    @access_check
+    def export_glossary_csv():
+        from flask import Response
+        csv_content = export_glossary_csv(get_glossary_store())
+        return Response(csv_content, mimetype='text/csv',
+                        headers={'Content-Disposition': 'attachment; filename=glossary.csv'})
+
+    @bp.get("/glossary/export/json")
+    @access_check
+    def export_glossary_json():
+        from flask import Response
+        store = get_glossary_store()
+        data = {'version': 1, 'updated_at': datetime.utcnow().isoformat() + 'Z',
+                'entries': [asdict(e) for e in store.list_all()]}
+        return Response(json.dumps(data, ensure_ascii=False, indent=2),
+                        mimetype='application/json',
+                        headers={'Content-Disposition': 'attachment; filename=glossary.json'})
+
+    @bp.post("/glossary/import")
+    @access_check
+    def import_glossary_csv():
+        if 'file' not in request.files: abort(400, description=_("No file"))
+        file = request.files['file']
+        skip = request.form.get('skip_existing', 'true').lower() == 'true'
+        csv_content = file.read().decode('utf-8')
+        store = get_glossary_store()
+        added, skipped = import_glossary_csv(store, csv_content, skip)
+        get_glossary_processor().reload()
+        return jsonify({"added": added, "skipped": skipped, "total": added + skipped})
+
+    @bp.post("/glossary/import/json")
+    @access_check
+    def import_glossary_json():
+        data = request.get_json()
+        if not data or 'entries' not in data: abort(400)
+        store = get_glossary_store()
+        added = skipped = 0
+        existing = {(e.source_term.lower(), e.source_lang, e.target_lang) for e in store.list_all()}
+        for e in data['entries']:
+            src = e.get('source_term', '').strip()
+            tgt = e.get('target_term', '').strip()
+            src_lang = e.get('source_lang', '').strip()
+            tgt_lang = e.get('target_lang', '').strip()
+            case_sens = bool(e.get('case_sensitive', False))
+            context = e.get('context', '').strip()
+            if not all([src, tgt, src_lang, tgt_lang]): continue
+            key = (src.lower(), src_lang, tgt_lang)
+            if key in existing: skipped += 1; continue
+            store.create(src, tgt, src_lang, tgt_lang, case_sens, context)
+            added += 1
+        get_glossary_processor().reload()
+        return jsonify({"added": added, "skipped": skipped, "total": added + skipped})
 
     app = Flask(__name__)
     app.config["JSON_AS_ASCII"] = False
