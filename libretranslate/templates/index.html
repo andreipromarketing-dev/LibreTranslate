@@ -285,19 +285,30 @@
 								<button @click="previewFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Preview") }}</button>
 								<button @click="translateFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Translate") }}</button>
 								<a v-if="translatedFileUrl !== false" :href="translatedFileUrl" class="btn">{{ _h("Download") }}</a>
-								<div class="progress file-progress" v-if="loadingFileTranslation">
-									<div class="determinate" :style="{width: fileProgress + '%'}"></div>
-								</div>
-								<div v-if="loadingFileTranslation" class="center file-translation-label">
-									<span v-if="fileProgressText !== ''">[[ fileProgressText ]]</span>
-									<span v-if="fileSpeedText !== ''"> · [[ fileSpeedText ]]</span>
-									<span v-if="fileEtaText !== ''"> · {{ _h("Time left") }} ~[[ fileEtaText ]]</span>
-								</div>
-								<div v-if="loadingFileTranslation" class="file-translation-controls">
-									<button @click="pauseFileJob" v-if="fileJobPaused === false" class="btn btn-small">{{ _h("Pause") }}</button>
-									<button @click="resumeFileJob" v-if="fileJobPaused === true" class="btn btn-small">{{ _h("Resume") }}</button>
-									<button @click="stopFileJob" class="btn btn-small red">{{ _h("Stop") }}</button>
-									<span v-if="fileJobPaused === true" class="file-translation-paused">{{ _h("Paused") }}</span>
+								<div class="file-job" v-if="loadingFileTranslation">
+									<div class="file-job-head">
+										<span class="file-job-file" :title="inputFile.name">[[ inputFile.name ]]</span>
+										<span class="file-job-status" :class="fileJobPaused ? 'is-paused' : 'is-running'">
+											<i class="material-icons" aria-hidden="true">[[ fileJobPaused ? 'pause' : 'cached' ]]</i>
+											<span v-if="fileJobPaused">{{ _h("Paused") }}</span>
+											<span v-else>{{ _h("Translating") }}</span>
+										</span>
+									</div>
+									<div class="file-progress-track" :class="fileJobPaused ? 'is-paused' : ''">
+										<div class="file-progress-fill" :style="{width: fileProgress + '%'}"></div>
+									</div>
+									<div class="file-job-meta">
+										<span class="file-job-percent">[[ fileProgressText ]]</span>
+										<span class="file-job-sub">
+											<span v-if="fileSpeedText !== ''">[[ fileSpeedText ]]</span>
+											<span v-if="fileEtaText !== ''"> · {{ _h("Time left") }} ~[[ fileEtaText ]]</span>
+										</span>
+									</div>
+									<div class="file-translation-controls">
+										<button @click="pauseFileJob" v-if="fileJobPaused === false" class="btn btn-small btn-file-outline">{{ _h("Pause") }}</button>
+										<button @click="resumeFileJob" v-if="fileJobPaused === true" class="btn btn-small btn-file-primary">{{ _h("Resume") }}</button>
+										<button @click="stopFileJob" class="btn btn-small btn-file-danger">{{ _h("Stop") }}</button>
+									</div>
 								</div>
 								</div>
 							</div>
@@ -363,7 +374,9 @@
 				<div class="row center">
 					<div class="col s12 m12">
 
-					<div class="row center code-row-wrapper">
+					<button @click="toggleApiExample" class="btn">{{ _h("Show API example") }}</button>
+
+					<div class="row center code-row-wrapper" v-if="showApiExample">
 						<div class="col s12 m12 l6 left-align code-box">
 							<p class="mb-0">{{ _h("Request") }}</p>
 							<pre class="code mt-0"><code class="language-javascript" v-html="$options.filters.highlight(requestCode)">

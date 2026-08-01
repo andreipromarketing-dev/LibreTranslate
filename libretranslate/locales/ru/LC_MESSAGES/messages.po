@@ -771,6 +771,10 @@ msgstr "Стоп"
 msgid "Paused"
 msgstr "Пауза"
 
+#: libretranslate/templates/index.html:293
+msgid "Translating"
+msgstr "Перевод…"
+
 #: libretranslate/templates/index.html:285
 msgid "Preview"
 msgstr "Предпросмотр"
@@ -819,6 +823,10 @@ msgstr "Запрос"
 #: libretranslate/templates/index.html:311
 msgid "Response"
 msgstr "Ответ"
+
+#: libretranslate/templates/index.html:307
+msgid "Show API example"
+msgstr "Показать пример API"
 
 #: libretranslate/templates/index.html:327
 msgid "Open Source Machine Translation API"

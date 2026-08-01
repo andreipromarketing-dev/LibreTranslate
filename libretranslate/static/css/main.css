@@ -358,7 +358,7 @@ select {
 }
 
 .progress.file-progress {
-  position: static;
+  position: relative;
   margin-top: 0.5rem;
 }
 
@@ -567,8 +567,119 @@ textarea:disabled{
   height: 2rem;
 }
 
-.file-translation-label {
-  margin-top: 0.25rem;
+.file-job {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.9rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--pri-bg-color);
+}
+
+.file-job-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.file-job-file {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.file-job-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+.file-job-status .material-icons {
+  font-size: 1rem;
+}
+
+.file-job-status.is-running {
+  color: #2ea043;
+  background: rgba(46, 160, 67, 0.15);
+}
+
+.file-job-status.is-paused {
+  color: #e65100;
+  background: rgba(230, 81, 0, 0.15);
+}
+
+.file-progress-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+
+.file-progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1565c0, #42a5f5);
+  transition: width 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.file-progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: translateX(-100%);
+  animation: file-progress-shimmer 1.4s linear infinite;
+}
+
+.file-progress-track.is-paused .file-progress-fill {
+  background: linear-gradient(90deg, #e65100, #ffa726);
+}
+
+.file-progress-track.is-paused .file-progress-fill::after {
+  animation: none;
+}
+
+@keyframes file-progress-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.file-job-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+  font-size: 0.85rem;
+  color: var(--fg-color);
+}
+
+.file-job-percent {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-job-sub {
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .file-translation-controls {
@@ -580,15 +691,90 @@ textarea:disabled{
 }
 
 .file-translation-controls .btn-small {
-  line-height: 28px;
-  height: 28px;
-  padding: 0 0.75rem;
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  line-height: 30px;
+  height: 30px;
+  padding: 0 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: none;
+  border-radius: 8px;
+  box-shadow: none;
+  transition: transform 140ms ease-out, background-color 180ms ease, color 180ms ease, border-color 180ms ease;
 }
 
-.file-translation-paused {
-  font-weight: 500;
-  color: #e65100;
-  margin-left: 0.25rem;
+.file-translation-controls .btn-small .material-icons {
+  font-size: 1.15rem;
+}
+
+.file-translation-controls .btn-small:active {
+  transform: scale(0.96);
+}
+
+.file-translation-controls .btn-file-outline {
+  color: var(--accent-color);
+  background: transparent;
+  border: 1px solid var(--accent-color);
+}
+
+.file-translation-controls .btn-file-primary {
+  color: #fff;
+  background: var(--accent-color);
+  border: 1px solid var(--accent-color);
+}
+
+.file-translation-controls .btn-file-primary .material-icons {
+  color: #fff;
+}
+
+.file-translation-controls .btn-file-danger {
+  color: #fff;
+  background: #e53935;
+  border: 1px solid #e53935;
+}
+
+.file-translation-controls .btn-file-danger .material-icons {
+  color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .file-translation-controls .btn-file-outline:hover {
+    color: #fff;
+    background: var(--accent-color);
+  }
+  .file-translation-controls .btn-file-primary:hover {
+    background: #0d4a8f;
+    border-color: #0d4a8f;
+  }
+  .file-translation-controls .btn-file-danger:hover {
+    background: #c62828;
+    border-color: #c62828;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .file-job-status.is-running {
+    color: #4cd97b;
+  }
+  .file-job-status.is-paused {
+    color: #ffb74d;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-progress-fill {
+    transition: none;
+  }
+  .file-progress-fill::after {
+    animation: none;
+  }
+  .file-translation-controls .btn-small {
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+  }
+  .file-translation-controls .btn-small:active {
+    transform: none;
+  }
 }
 

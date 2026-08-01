@@ -747,6 +747,10 @@ msgstr ""
 msgid "Response"
 msgstr ""
 
+#: libretranslate/templates/index.html:307
+msgid "Show API example"
+msgstr ""
+
 #: libretranslate/templates/index.html:327
 msgid "Open Source Machine Translation API"
 msgstr ""
@@ -791,6 +795,10 @@ msgstr ""
 
 #: libretranslate/templates/index.html:297
 msgid "Paused"
+msgstr ""
+
+#: libretranslate/templates/index.html:293
+msgid "Translating"
 msgstr ""
 
 #: libretranslate/templates/index.html:285

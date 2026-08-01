@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
             supportedFilesFormat : [],
             translationType: "text",
+            showApiExample: false,
             inputFile: false,
             loadingFileTranslation: false,
             translatedFileUrl: false,
@@ -390,6 +391,9 @@ document.addEventListener('DOMContentLoaded', function(){
             },
             switchType: function(type) {
                 this.translationType = type;
+            },
+            toggleApiExample: function() {
+                this.showApiExample = !this.showApiExample;
             },
             handleInputFile: function(e) {
                 this.inputFile = e.target.files[0];
