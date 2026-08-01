@@ -1408,6 +1408,111 @@ def create_app(args):
 
         return jsonify(job)
 
+    @bp.post("/translate_job/<string:job_id>/pause")
+    @access_check
+    def translate_job_pause(job_id: str):
+        """
+        Pause a file translation
+        ---
+        tags:
+          - translate
+        parameters:
+          - in: path
+            name: job_id
+            type: string
+            required: true
+            description: Id of the file translation job
+        responses:
+          200:
+            description: Job snapshot with status "paused"
+            schema:
+              id: translate-job
+              type: object
+          404:
+            description: Job not found
+            schema:
+              id: error-response
+              type: object
+              properties:
+                error:
+                  type: string
+                  description: Error message
+        """
+        if job_store.snapshot(job_id) is None:
+            abort(404, description=_("Job not found"))
+        job_store.pause(job_id)
+        return jsonify(job_store.snapshot(job_id))
+
+    @bp.post("/translate_job/<string:job_id>/resume")
+    @access_check
+    def translate_job_resume(job_id: str):
+        """
+        Resume a paused file translation
+        ---
+        tags:
+          - translate
+        parameters:
+          - in: path
+            name: job_id
+            type: string
+            required: true
+            description: Id of the file translation job
+        responses:
+          200:
+            description: Job snapshot with status "running"
+            schema:
+              id: translate-job
+              type: object
+          404:
+            description: Job not found
+            schema:
+              id: error-response
+              type: object
+              properties:
+                error:
+                  type: string
+                  description: Error message
+        """
+        if job_store.snapshot(job_id) is None:
+            abort(404, description=_("Job not found"))
+        job_store.resume(job_id)
+        return jsonify(job_store.snapshot(job_id))
+
+    @bp.post("/translate_job/<string:job_id>/stop")
+    @access_check
+    def translate_job_stop(job_id: str):
+        """
+        Cancel a file translation and remove its partial output
+        ---
+        tags:
+          - translate
+        parameters:
+          - in: path
+            name: job_id
+            type: string
+            required: true
+            description: Id of the file translation job
+        responses:
+          200:
+            description: Job snapshot with status "cancelled"
+            schema:
+              id: translate-job
+              type: object
+          404:
+            description: Job not found
+            schema:
+              id: error-response
+              type: object
+              properties:
+                error:
+                  type: string
+                  description: Error message
+        """
+        if job_store.snapshot(job_id) is None:
+            abort(404, description=_("Job not found"))
+        job_store.cancel(job_id)
+        return jsonify(job_store.snapshot(job_id))
+
     @bp.post("/detect")
     @access_check
     def detect():

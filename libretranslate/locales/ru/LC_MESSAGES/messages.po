@@ -755,6 +755,22 @@ msgstr "Перевести"
 msgid "Time left"
 msgstr "Осталось"
 
+#: libretranslate/templates/index.html:293
+msgid "Pause"
+msgstr "Пауза"
+
+#: libretranslate/templates/index.html:294
+msgid "Resume"
+msgstr "Продолжить"
+
+#: libretranslate/templates/index.html:295
+msgid "Stop"
+msgstr "Стоп"
+
+#: libretranslate/templates/index.html:297
+msgid "Paused"
+msgstr "Пауза"
+
 #: libretranslate/templates/index.html:285
 msgid "Preview"
 msgstr "Предпросмотр"

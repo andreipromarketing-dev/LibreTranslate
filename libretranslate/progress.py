@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 
@@ -7,12 +8,16 @@ from argostranslate.translate import ITranslation
 from libretranslate import pdf_file, text_file
 
 
+class JobCancelledError(Exception):
+    """Raised inside a worker thread when the job is cancelled."""
+
+
 class FileTranslationJob:
     """State of a single background file-translation job."""
 
     def __init__(self, job_id: str):
         self.job_id = job_id
-        self.status = "running"  # running | done | error
+        self.status = "running"  # running | paused | done | cancelled | error
         self.progress = 0.0      # 0..100
         self.processed_chars = 0
         self.total_chars = 0
@@ -22,6 +27,9 @@ class FileTranslationJob:
         self.translated_file_path = None
         self.created_at = time.time()
         self.finished_at = None
+        self.pause_event = threading.Event()
+        self.pause_event.set()  # set = running, cleared = paused
+        self.cancel_event = threading.Event()
 
 
 class JobStore:
@@ -58,6 +66,32 @@ class JobStore:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def pause(self, job_id: str) -> FileTranslationJob | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None and job.status == "running":
+                job.pause_event.clear()
+                job.status = "paused"
+            return job
+
+    def resume(self, job_id: str) -> FileTranslationJob | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None and job.status == "paused":
+                job.pause_event.set()
+                job.status = "running"
+            return job
+
+    def cancel(self, job_id: str) -> FileTranslationJob | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None and job.status in ("running", "paused"):
+                job.cancel_event.set()
+                job.pause_event.set()  # wake any waiter so it can notice the cancel
+                job.status = "cancelled"
+                job.finished_at = time.time()
+            return job
+
     def cleanup(self):
         now = time.time()
         with self._lock:
@@ -87,19 +121,26 @@ class ProgressTranslation(ITranslation):
         self.from_lang = underlying.from_lang
         self.to_lang = underlying.to_lang
         self.job = job
-        self._start_time = None
+        self._start_time = time.time()
+
+    def _wait_if_paused(self):
+        """Block until the job is running again or cancelled.
+
+        Called between paragraphs so a paused job stops consuming CPU/GPU.
+        """
+        while not self.job.pause_event.is_set():
+            if self.job.cancel_event.is_set():
+                raise JobCancelledError()
+            self.job.pause_event.wait(timeout=0.2)
 
     def translate(self, input_text: str) -> str:
         paragraphs = ITranslation.split_into_paragraphs(input_text)
-        total_len = sum(len(p) for p in paragraphs)
-
-        with job_store._lock:
-            if self._start_time is None:
-                self._start_time = time.time()
-            self.job.total_chars += total_len
 
         translated = []
         for paragraph in paragraphs:
+            self._wait_if_paused()
+            if self.job.cancel_event.is_set():
+                raise JobCancelledError()
             translated.append(self.underlying.translate(paragraph))
             with job_store._lock:
                 self.job.processed_chars += len(paragraph)
@@ -129,11 +170,53 @@ def fail_job(job_id: str, error: str):
         job.finished_at = time.time()
 
 
+def _argos_output_path(translation: ITranslation, filepath: str):
+    for supported_format in argostranslatefiles.get_supported_formats():
+        if supported_format.support(filepath):
+            return supported_format.get_output_path(translation, filepath)
+    return None
+
+
+def _compute_total_chars(translation: ITranslation, filepath: str, codec: str) -> int:
+    """Pre-compute the total number of characters to translate for the job.
+
+    Computed once at job start so the progress bar moves 0 -> 100 honestly
+    instead of jumping to 100 on the first call.
+    """
+    if text_file.is_text_file(filepath):
+        return text_file.total_chars(filepath, codec)
+    if pdf_file.is_pdf_file(filepath):
+        return pdf_file.total_chars(filepath)
+    for supported_format in argostranslatefiles.get_supported_formats():
+        if supported_format.support(filepath):
+            return sum(len(t) for t in supported_format.get_texts(filepath))
+    return 0
+
+
+def _remove_partial_output(translation: ITranslation, filepath: str):
+    try:
+        if text_file.is_text_file(filepath):
+            outfile = text_file.get_output_path(translation, filepath)
+        elif pdf_file.is_pdf_file(filepath):
+            outfile = pdf_file.get_output_path(translation, filepath)
+        else:
+            outfile = _argos_output_path(translation, filepath)
+        if outfile and os.path.isfile(outfile):
+            os.remove(outfile)
+    except OSError:
+        pass
+
+
 def run_file_job(job_id: str, translation: ITranslation, filepath: str, codec: str = "auto"):
     """Translate a file in the background and store the outcome on the job."""
     job = job_store.get_object(job_id)
     if job is None:
         return
+    try:
+        with job_store._lock:
+            job.total_chars = _compute_total_chars(translation, filepath, codec)
+    except Exception:
+        pass  # keep 0; progress will jump to 100 when the job completes
     try:
         if text_file.is_text_file(filepath):
             translated_file_path = text_file.translate_text_file(
@@ -150,6 +233,11 @@ def run_file_job(job_id: str, translation: ITranslation, filepath: str, codec: s
             job.status = "done"
             job.progress = 100.0
             job.eta = 0
+            job.finished_at = time.time()
+    except JobCancelledError:
+        _remove_partial_output(translation, filepath)
+        with job_store._lock:
+            job.status = "cancelled"
             job.finished_at = time.time()
     except Exception as e:
         with job_store._lock:

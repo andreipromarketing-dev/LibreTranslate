@@ -116,6 +116,29 @@ def get_texts(filepath: str) -> str:
 class RepairedPdfTranslator(PdfTranslator):
     """``PdfTranslator`` that repairs broken text layers before translation."""
 
+    def _job(self):
+        # ProgressTranslation exposes the backing job; base PdfTranslator is
+        # used without a job (direct API calls), in which case there is none.
+        return getattr(self.underlying_translation, "job", None)
+
+    def _check_cancelled(self):
+        job = self._job()
+        if job is not None and job.cancel_event.is_set():
+            from libretranslate.progress import JobCancelledError
+
+            raise JobCancelledError()
+
+    def _check_paused(self):
+        job = self._job()
+        if job is None:
+            return
+        from libretranslate.progress import JobCancelledError
+
+        while not job.pause_event.is_set():
+            if job.cancel_event.is_set():
+                raise JobCancelledError()
+            job.pause_event.wait(timeout=0.2)
+
     def translate_pdf(self):
         sample = []
         count = 0
@@ -127,9 +150,19 @@ class RepairedPdfTranslator(PdfTranslator):
                 if count >= _PREVIEW_CHARS:
                     break
         self._repair = needs_repair(" ".join(sample)[:_PREVIEW_CHARS])
-        super().translate_pdf()
+
+        self._extract_text_from_pages()
+        self._check_cancelled()
+        self._translate_pages_data()
+        self._check_cancelled()
+        self._apply_translations_to_pdf()
+        self._check_cancelled()
+        self._save_translated_pdf()
 
     def _extract_text_with_pymupdf(self, page_num: int):
+        self._check_paused()
+        self._check_cancelled()
+
         while len(self.pages_data) <= page_num:
             self.pages_data.append([])
 
@@ -186,6 +219,66 @@ class RepairedPdfTranslator(PdfTranslator):
                                 ]
                             )
 
+    def _apply_translations_to_pdf(self):
+        # Same layout logic as the base PdfTranslator, with a pause/cancel
+        # check per page so pause/stop also free the CPU during this phase.
+        for page_index, blocks in enumerate(self.pages_data):
+            self._check_paused()
+            self._check_cancelled()
+
+            if not blocks:
+                continue
+
+            page = self.doc.load_page(page_index)
+
+            normal_blocks = []
+            bold_blocks = []
+
+            for block in blocks:
+                coords = block[1]
+                translated_text = block[2] if block[2] is not None else block[0]
+
+                # Calculate expansion factor based on text length ratio
+                len_ratio = min(1.05, max(1.01, len(translated_text) / max(1, len(block[0]))))
+
+                x0, y0, x1, y1 = coords
+                width = x1 - x0
+                height = y1 - y0
+
+                # Expand horizontally to accommodate longer text
+                h_expand = (len_ratio - 1) * width
+                x1 = x1 + h_expand
+
+                # Reduce vertical coverage to be more precise
+                vertical_margin = min(height * 0.1, 3)
+                y0 = y0 + vertical_margin
+                y1 = y1 - vertical_margin
+
+                # Ensure minimum height
+                if y1 - y0 < 10:
+                    y_center = (coords[1] + coords[3]) / 2
+                    y0 = y_center - 5
+                    y1 = y_center + 5
+
+                enlarged_coords = (x0, y0, x1, y1)
+                rect = fitz.Rect(*enlarged_coords)
+
+                # Cover original text with white rectangle
+                try:
+                    page.add_redact_annot(rect)
+                    page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+                except Exception:
+                    page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
+
+                is_bold = len(block) > 6 and block[6]
+                if is_bold:
+                    bold_blocks.append((block, enlarged_coords))
+                else:
+                    normal_blocks.append((block, enlarged_coords))
+
+            self._insert_styled_text_blocks(page, normal_blocks, is_bold=False)
+            self._insert_styled_text_blocks(page, bold_blocks, is_bold=True)
+
 
 def translate_pdf(underlying_translation: ITranslation, filepath: str) -> str:
     """Translate a PDF, repairing broken text layers first."""
@@ -203,3 +296,40 @@ def translate_pdf(underlying_translation: ITranslation, filepath: str) -> str:
 
 def is_pdf_file(filepath: str) -> bool:
     return os.path.splitext(filepath)[1].lower() == ".pdf"
+
+
+def get_output_path(underlying_translation: ITranslation, filepath: str) -> str:
+    """Output path produced by ``translate_pdf`` for the given input."""
+    return Pdf().get_output_path(underlying_translation, filepath)
+
+
+def total_chars(filepath: str) -> int:
+    """Total number of characters that will be translated (for progress)."""
+    doc = fitz.open(filepath)
+    try:
+        # Same repair detection as RepairedPdfTranslator.translate_pdf
+        sample = []
+        count = 0
+        for page_num in range(min(10, doc.page_count)):
+            text = doc.load_page(page_num).get_text().strip()
+            if text:
+                sample.append(text)
+                count += len(text)
+                if count >= _PREVIEW_CHARS:
+                    break
+        repair = needs_repair(" ".join(sample)[:_PREVIEW_CHARS])
+
+        total = 0
+        for page_num in range(doc.page_count):
+            page = doc.load_page(page_num)
+            for block in page.get_text("dict")["blocks"]:
+                if "lines" not in block:
+                    continue
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        text = span.get("text", "").strip()
+                        if text:
+                            total += len(repair_text(text) if repair else text)
+        return total
+    finally:
+        doc.close()

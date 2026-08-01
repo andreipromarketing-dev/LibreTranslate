@@ -172,3 +172,20 @@ def get_texts(filepath: str, codec: str = "auto"):
 
     text, used_codec = read_text(filepath, codec)
     return text[:_PREVIEW_CHARS], used_codec
+
+
+def total_chars(filepath: str, codec: str = "auto") -> int:
+    """Total number of characters that will be translated (for progress)."""
+    ext = os.path.splitext(filepath)[1].lower()
+
+    if ext == ".srt":
+        subs, _ = _srt_subs(filepath, codec)
+        return sum(len(sub.text) for sub in subs)
+
+    if ext in (".html", ".htm"):
+        content, _ = read_text(filepath, codec)
+        soup = BeautifulSoup(content, "html.parser")
+        return len(translatehtml.itag_of_soup(soup).text())
+
+    text, _ = read_text(filepath, codec)
+    return len(text)

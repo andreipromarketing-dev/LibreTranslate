@@ -282,17 +282,23 @@
 											</div>
 										</div>
 									</div>
-									<button @click="previewFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Preview") }}</button>
-									<button @click="translateFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Translate") }}</button>
-									<a v-if="translatedFileUrl !== false" :href="translatedFileUrl" class="btn">{{ _h("Download") }}</a>
-									<div class="progress translate" v-if="loadingFileTranslation">
-										<div class="determinate" :style="{width: fileProgress + '%'}"></div>
-									</div>
-									<div v-if="loadingFileTranslation" class="center file-translation-label">
-										<span v-if="fileProgressText !== ''">[[ fileProgressText ]]</span>
-										<span v-if="fileSpeedText !== ''"> · [[ fileSpeedText ]]</span>
-										<span v-if="fileEtaText !== ''"> · {{ _h("Time left") }} ~[[ fileEtaText ]]</span>
-									</div>
+								<button @click="previewFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Preview") }}</button>
+								<button @click="translateFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Translate") }}</button>
+								<a v-if="translatedFileUrl !== false" :href="translatedFileUrl" class="btn">{{ _h("Download") }}</a>
+								<div class="progress file-progress" v-if="loadingFileTranslation">
+									<div class="determinate" :style="{width: fileProgress + '%'}"></div>
+								</div>
+								<div v-if="loadingFileTranslation" class="center file-translation-label">
+									<span v-if="fileProgressText !== ''">[[ fileProgressText ]]</span>
+									<span v-if="fileSpeedText !== ''"> · [[ fileSpeedText ]]</span>
+									<span v-if="fileEtaText !== ''"> · {{ _h("Time left") }} ~[[ fileEtaText ]]</span>
+								</div>
+								<div v-if="loadingFileTranslation" class="file-translation-controls">
+									<button @click="pauseFileJob" v-if="fileJobPaused === false" class="btn btn-small">{{ _h("Pause") }}</button>
+									<button @click="resumeFileJob" v-if="fileJobPaused === true" class="btn btn-small">{{ _h("Resume") }}</button>
+									<button @click="stopFileJob" class="btn btn-small red">{{ _h("Stop") }}</button>
+									<span v-if="fileJobPaused === true" class="file-translation-paused">{{ _h("Paused") }}</span>
+								</div>
 								</div>
 							</div>
 						</div>
@@ -307,9 +313,9 @@
 											</button>
 										</div>
 									</div>
-									<div v-if="filePreviewLoading" class="progress translate">
-										<div class="indeterminate"></div>
-									</div>
+								<div v-if="filePreviewLoading" class="progress file-progress">
+									<div class="indeterminate"></div>
+								</div>
 									<div v-if="!filePreviewLoading && filePreview" class="row">
 										<div class="col s12 m6">
 											<div class="input-field">

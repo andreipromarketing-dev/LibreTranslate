@@ -777,6 +777,22 @@ msgstr ""
 msgid "Time left"
 msgstr ""
 
+#: libretranslate/templates/index.html:293
+msgid "Pause"
+msgstr ""
+
+#: libretranslate/templates/index.html:294
+msgid "Resume"
+msgstr ""
+
+#: libretranslate/templates/index.html:295
+msgid "Stop"
+msgstr ""
+
+#: libretranslate/templates/index.html:297
+msgid "Paused"
+msgstr ""
+
 #: libretranslate/templates/index.html:285
 msgid "Preview"
 msgstr ""

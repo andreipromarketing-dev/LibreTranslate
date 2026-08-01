@@ -357,6 +357,11 @@ select {
   position: absolute;
 }
 
+.progress.file-progress {
+  position: static;
+  margin-top: 0.5rem;
+}
+
 .progress .indeterminate {
   background-color: steelblue;
 }
@@ -560,5 +565,30 @@ textarea:disabled{
 
 .file-preview-codec .browser-default {
   height: 2rem;
+}
+
+.file-translation-label {
+  margin-top: 0.25rem;
+}
+
+.file-translation-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.file-translation-controls .btn-small {
+  line-height: 28px;
+  height: 28px;
+  padding: 0 0.75rem;
+  font-size: 0.8rem;
+}
+
+.file-translation-paused {
+  font-weight: 500;
+  color: #e65100;
+  margin-left: 0.25rem;
 }
 

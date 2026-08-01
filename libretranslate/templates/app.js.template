@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', function(){
             loadingFileTranslation: false,
             translatedFileUrl: false,
             fileJobId: false,
+            fileJobPaused: false,
             fileProgress: 0,
             fileProgressText: "",
             fileSpeedText: "",
@@ -494,6 +495,7 @@ document.addEventListener('DOMContentLoaded', function(){
                 this.fileProgressText = ""
                 this.fileSpeedText = ""
                 this.fileEtaText = ""
+                this.fileJobPaused = false
 
                 translateFileRequest.onload = function()  {
                     if (translateFileRequest.readyState === 4 && translateFileRequest.status === 200) {
@@ -558,20 +560,36 @@ document.addEventListener('DOMContentLoaded', function(){
                             self.updateFileProgress(job);
 
                             if (job.status === "running") {
+                                self.fileJobPaused = false;
+                                return;
+                            }
+                            if (job.status === "paused") {
+                                self.fileJobPaused = true;
                                 return;
                             }
 
                             stopPolling();
                             self.loadingFileTranslation = false;
+                            self.fileJobPaused = false;
 
-                            if (job.status === "done" && job.translatedFileUrl) {
-                                self.translatedFileUrl = job.translatedFileUrl;
+                            if (job.status === "done") {
+                                if (job.translatedFileUrl) {
+                                    self.translatedFileUrl = job.translatedFileUrl;
 
-                                let link = document.createElement("a");
-                                link.href = self.translatedFileUrl;
-                                link.download = "";
-                                link.click();
-                                handleNotification("Translation Complete", "Finished translating " + self.inputFile.name + ".");
+                                    let link = document.createElement("a");
+                                    link.href = job.translatedFileUrl;
+                                    link.download = "";
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    handleNotification("Translation Complete", "Finished translating " + self.inputFile.name + ".");
+                                } else {
+                                    self.error = {{ _e("Cannot load %(url)s", url=url_prefix + "/translate_job") }};
+                                    self.inputFile = false;
+                                    handleNotification("Translation Failed", self.error);
+                                }
+                            } else if (job.status === "cancelled") {
+                                handleNotification("Translation Cancelled", "Translation of " + self.inputFile.name + " was cancelled.");
                             } else if (job.status === "error") {
                                 self.error = job.error || {{ _e("Unknown error") }};
                                 self.inputFile = false;
@@ -604,6 +622,48 @@ document.addEventListener('DOMContentLoaded', function(){
                 this.fileProgressText = String(this.fileProgress) + "%";
                 this.fileSpeedText = job.speed ? formatFileSpeed(job.speed) : "";
                 this.fileEtaText = (job.eta != null) ? formatFileEta(job.eta) : "";
+            },
+            pauseFileJob: function() {
+                let self = this;
+                let req = new XMLHttpRequest();
+                req.open("POST", BaseUrl + "/translate_job/" + self.fileJobId + "/pause", true);
+                req.onload = function() {
+                    if (req.readyState === 4 && req.status === 200) {
+                        let job = JSON.parse(req.response);
+                        self.fileJobPaused = job.status === "paused";
+                    }
+                };
+                req.send();
+            },
+            resumeFileJob: function() {
+                let self = this;
+                let req = new XMLHttpRequest();
+                req.open("POST", BaseUrl + "/translate_job/" + self.fileJobId + "/resume", true);
+                req.onload = function() {
+                    if (req.readyState === 4 && req.status === 200) {
+                        let job = JSON.parse(req.response);
+                        self.fileJobPaused = !(job.status === "running");
+                    }
+                };
+                req.send();
+            },
+            stopFileJob: function() {
+                let self = this;
+                let req = new XMLHttpRequest();
+                req.open("POST", BaseUrl + "/translate_job/" + self.fileJobId + "/stop", true);
+                req.onload = function() {
+                    if (req.readyState === 4 && req.status === 200) {
+                        if (self.filePollTimer) {
+                            clearInterval(self.filePollTimer);
+                            self.filePollTimer = false;
+                        }
+                        self.loadingFileTranslation = false;
+                        self.fileJobPaused = false;
+                        self.translatedFileUrl = false;
+                        handleNotification("Translation Cancelled", "Translation of " + self.inputFile.name + " was cancelled.");
+                    }
+                };
+                req.send();
             }
         }
     });
