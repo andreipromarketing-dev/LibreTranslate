@@ -736,53 +736,74 @@ document.addEventListener('DOMContentLoaded', function(){
             },
             saveTranslatedFile: function(url) {
                 let self = this;
-                const fileName = url.split("/").pop() || "translated";
                 
-                // Store for "Open last translation" button
+                // Guard against multiple calls from polling
+                if (self._saveInProgress) return;
+                self._saveInProgress = true;
+                
                 self.lastTranslatedFileUrl = url;
+                const fileName = url.split("/").pop() || "translated.pdf";
                 
-                const finish = function() {
-                    let link = document.createElement("a");
-                    link.href = url;
-                    link.download = fileName;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    
-                    // Show notification with save location
-                    let msg = "Finished translating " + self.inputFile.name + ".";
-                    if (self.saveDirHandle) {
-                        msg += " " + {{ _e("Saved to") }} + " " + self.saveDirHandle.name;
-                    } else {
-                        msg += " " + {{ _e("File downloaded to your default Downloads folder") }};
-                    }
-                    handleNotification("Translation Complete", msg);
-                };
+                // 1. AUTO DOWNLOAD to Downloads folder (always works, non-blocking)
+                let link = document.createElement("a");
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
                 
-                if (!self.saveDirHandle) {
-                    finish();
-                    return;
+                // 2. NATIVE "Save As..." dialog (Chrome/Edge) - runs in parallel, non-blocking
+                if (window.showSaveFilePicker) {
+                    fetch(url)
+                        .then(function(r) { return r.blob(); })
+                        .then(function(blob) {
+                            return window.showSaveFilePicker({
+                                suggestedName: fileName,
+                                types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
+                            }).then(function(handle) {
+                                return handle.createWritable().then(function(writable) {
+                                    return writable.write(blob).then(function() {
+                                        writable.close();
+                                        handleNotification("Saved", {{ _e("Saved to") }} + " " + handle.name);
+                                    });
+                                });
+                            }).catch(function(err) {
+                                if (err.name !== 'AbortError') {
+                                    console.warn("Save dialog failed:", err);
+                                }
+                            });
+                        })
+                        .catch(function() {});
                 }
                 
-                fetch(url)
-                    .then(function(r) { return r.blob(); })
-                    .then(function(blob) {
-                        return self.saveDirHandle.getFileHandle(fileName, { create: true })
-                            .then(function(fileHandle) { return fileHandle.createWritable(); })
-                            .then(function(writable) {
-                                return writable.write(blob).then(function() { return writable.close(); });
-                            });
-                    })
-                    .then(function() {
-                        self.saveDirectoryError = "";
-                        handleNotification("Translation Complete", 
-                            "Finished translating " + self.inputFile.name + ". " + 
-                            {{ _e("Saved to") }} + " " + self.saveDirHandle.name);
-                    })
-                    .catch(function() {
-                        self.saveDirectoryError = {{ _e("Could not write to the selected folder, the file was downloaded instead.") }};
-                        finish();
-                    });
+                // 3. SAVE TO USER-SELECTED FOLDER (if any) - silent background save
+                if (self.saveDirHandle) {
+                    fetch(url)
+                        .then(function(r) { return r.blob(); })
+                        .then(function(blob) {
+                            return self.saveDirHandle.getFileHandle(fileName, { create: true })
+                                .then(function(fileHandle) { return fileHandle.createWritable(); })
+                                .then(function(writable) {
+                                    return writable.write(blob).then(function() { return writable.close(); });
+                                });
+                        })
+                        .then(function() {
+                            self.saveDirectoryError = "";
+                            // Silent - no notification to avoid spam
+                        })
+                        .catch(function() {
+                            self.saveDirectoryError = {{ _e("Could not write to the selected folder, the file was downloaded instead.") }};
+                        });
+                }
+                
+                // Single notification
+                let msg = "Finished translating " + self.inputFile.name + ". " + {{ _e("File downloaded to your default Downloads folder") }};
+                if (self.saveDirHandle) {
+                    msg += " " + {{ _e("and saved to") }} + " " + self.saveDirHandle.name;
+                }
+                handleNotification("Translation Complete", msg);
+                
+                self._saveInProgress = false;
             },
             
             openLastTranslation: function() {

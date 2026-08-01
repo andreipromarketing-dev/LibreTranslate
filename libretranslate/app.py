@@ -1087,6 +1087,9 @@ def create_app(args):
             args=(job.job_id, source_lang, target_lang, filepath, codec),
             daemon=True,
         ).start()
+        
+        import logging
+        logging.info(f"[FILE] translate_file: job_id={job.job_id}, file={file.filename}, src={source_lang}, tgt={target_lang}")
 
         return jsonify({"jobId": job.job_id})
 
@@ -1420,11 +1423,21 @@ def create_app(args):
         if job["status"] == "done":
             job_obj = job_store.get_object(job_id)
             if job_obj is not None and job_obj.translated_file_path:
+                filename = os.path.basename(job_obj.translated_file_path)
                 job["translatedFileUrl"] = url_for(
                     'Main app.download_file',
-                    filename=os.path.basename(job_obj.translated_file_path),
+                    filename=filename,
                     _external=True,
                 )
+                # Add web_filename for frontend
+                try:
+                    from libretranslate.pdf_file import get_web_filename
+                    job["webFilename"] = get_web_filename(job_obj.translated_file_path)
+                except Exception:
+                    job["webFilename"] = filename
+                
+                import logging
+                logging.info(f"[FILE] translate_job: job_id={job_id}, status=done, file={job.get('webFilename', filename)}, url={job.get('translatedFileUrl')}")
 
         return jsonify(job)
 

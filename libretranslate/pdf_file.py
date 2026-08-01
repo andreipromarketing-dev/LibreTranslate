@@ -219,20 +219,60 @@ class RepairedPdfTranslator(PdfTranslator):
                                 ]
                             )
 
+    def _translate_pages_data(self):
+        # Same as the base PdfTranslator, but JobCancelledError (pause/stop)
+        # must propagate instead of being swallowed by the base fallback that
+        # silently keeps the original text and finishes the job as "done".
+        from libretranslate.progress import JobCancelledError
+
+        for page_blocks in self.pages_data:
+            for block in page_blocks:
+                try:
+                    translated_text = self.underlying_translation.translate(block[0])
+                except JobCancelledError:
+                    raise
+                except Exception:
+                    # Keep the base behaviour for genuinely failing spans:
+                    # leave the original text rather than aborting the book.
+                    translated_text = block[0]
+                block[2] = translated_text
+
+    def _report_assembly_progress(self, done_pages: int, total_pages: int):
+        job = self._job()
+        if job is None or total_pages <= 0:
+            return
+        from libretranslate.progress import set_job_progress
+
+        fraction = min(1.0, done_pages / total_pages)
+        # Translate phase caps at 95%; assembly reports the remaining 5%.
+        set_job_progress(job, 95.0 + fraction * 5.0)
+
     def _apply_translations_to_pdf(self):
-        # Same layout logic as the base PdfTranslator, with a pause/cancel
-        # check per page so pause/stop also free the CPU during this phase.
+        # Same layout logic as the base PdfTranslator, with:
+        #  * pause/cancel checks per page (pause/stop free the CPU during this phase);
+        #  * all redactions of a page batched into ONE apply_redactions() call
+        #    (calling it per span re-processes the whole page every time and
+        #    makes large documents take tens of minutes after translation);
+        #  * progress reported per page so the bar moves 95% -> 100% instead of
+        #    sitting on a stuck "100%".
+        total_pages = len(self.pages_data)
+        done_pages = 0
+
         for page_index, blocks in enumerate(self.pages_data):
             self._check_paused()
             self._check_cancelled()
 
+            done_pages += 1
+
             if not blocks:
+                self._report_assembly_progress(done_pages, total_pages)
                 continue
 
             page = self.doc.load_page(page_index)
 
             normal_blocks = []
             bold_blocks = []
+            redact_rects = []
 
             for block in blocks:
                 coords = block[1]
@@ -261,14 +301,7 @@ class RepairedPdfTranslator(PdfTranslator):
                     y1 = y_center + 5
 
                 enlarged_coords = (x0, y0, x1, y1)
-                rect = fitz.Rect(*enlarged_coords)
-
-                # Cover original text with white rectangle
-                try:
-                    page.add_redact_annot(rect)
-                    page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
-                except Exception:
-                    page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
+                redact_rects.append(fitz.Rect(*enlarged_coords))
 
                 is_bold = len(block) > 6 and block[6]
                 if is_bold:
@@ -276,8 +309,66 @@ class RepairedPdfTranslator(PdfTranslator):
                 else:
                     normal_blocks.append((block, enlarged_coords))
 
+            # Cover original text with white rectangles (batched).
+            for rect in redact_rects:
+                try:
+                    page.add_redact_annot(rect)
+                except Exception:
+                    page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
+
+            try:
+                page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+            except Exception:
+                for rect in redact_rects:
+                    page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
+
             self._insert_styled_text_blocks(page, normal_blocks, is_bold=False)
             self._insert_styled_text_blocks(page, bold_blocks, is_bold=True)
+
+            self._report_assembly_progress(done_pages, total_pages)
+
+    def _save_translated_pdf(self):
+        self._check_paused()
+        self._check_cancelled()
+        new_doc = fitz.open()
+        new_doc.insert_pdf(self.doc)
+        self._check_cancelled()
+        
+        # 1. Save to original output_path (argostranslatefiles location)
+        new_doc.save(self.output_path, garbage=4, deflate=True)
+        
+        # 2. Copy to upload_dir for web accessibility
+        try:
+            import shutil
+            from libretranslate.app import get_upload_dir
+            upload_dir = get_upload_dir()
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # Generate user-friendly filename: original_translated.pdf
+            original_name = os.path.basename(self.output_path)
+            if '_' in original_name:
+                parts = original_name.split('_', 1)
+                if len(parts) == 2:
+                    web_name = f"{parts[1].rsplit('.', 1)[0]}_translated.pdf"
+                else:
+                    web_name = f"translated_{original_name}"
+            else:
+                web_name = f"translated_{original_name}"
+            
+            web_path = os.path.join(upload_dir, web_name)
+            shutil.copy2(self.output_path, web_path)
+            
+            # Store web path for frontend
+            self.web_output_path = web_path
+            self.web_filename = web_name
+            print(f"[PDF] Saved to upload_dir: {web_path}")
+        except Exception as e:
+            print(f"[PDF] Warning: Could not copy to upload_dir: {e}")
+            self.web_output_path = self.output_path
+            self.web_filename = os.path.basename(self.output_path)
+        
+        new_doc.close()
+        self.doc.close()
 
 
 def translate_pdf(underlying_translation: ITranslation, filepath: str) -> str:
@@ -291,7 +382,18 @@ def translate_pdf(underlying_translation: ITranslation, filepath: str) -> str:
     )
     translator.translate_pdf()
 
-    return outfile_path
+    # Return the web-accessible path (in upload_dir) for frontend download
+    return getattr(translator, 'web_output_path', outfile_path)
+
+
+def get_web_filename(filepath: str) -> str:
+    """Generate user-friendly filename for web download: original_translated.pdf"""
+    original_name = os.path.basename(filepath)
+    if '_' in original_name:
+        parts = original_name.split('_', 1)
+        if len(parts) == 2:
+            return f"{parts[1].rsplit('.', 1)[0]}_translated.pdf"
+    return f"translated_{original_name}"
 
 
 def is_pdf_file(filepath: str) -> bool:

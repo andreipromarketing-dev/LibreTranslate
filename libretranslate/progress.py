@@ -25,6 +25,7 @@ class FileTranslationJob:
         self.eta = None          # remaining seconds (or None while unknown)
         self.error = None
         self.translated_file_path = None
+        self.source_path = None
         self.created_at = time.time()
         self.finished_at = None
         self.pause_event = threading.Event()
@@ -65,6 +66,10 @@ class JobStore:
     def get_object(self, job_id: str) -> FileTranslationJob | None:
         with self._lock:
             return self._jobs.get(job_id)
+
+    def all(self) -> list[FileTranslationJob]:
+        with self._lock:
+            return list(self._jobs.values())
 
     def pause(self, job_id: str) -> FileTranslationJob | None:
         with self._lock:
@@ -145,17 +150,21 @@ class ProgressTranslation(ITranslation):
             with job_store._lock:
                 self.job.processed_chars += len(paragraph)
                 if self.job.total_chars > 0:
+                    # The translate phase reports 0..95%. The last 5% is
+                    # driven by the file-assembly phase (e.g. PDF
+                    # redaction/writing) so the UI never sits on a stuck
+                    # "100%" while the output is still being produced.
                     self.job.progress = min(
-                        100.0, 100.0 * self.job.processed_chars / self.job.total_chars
+                        95.0, 100.0 * self.job.processed_chars / self.job.total_chars
                     )
-                elapsed = time.time() - self._start_time
-                if elapsed > 0:
-                    self.job.speed = self.job.processed_chars / elapsed
-                    remaining = self.job.total_chars - self.job.processed_chars
-                    if self.job.speed > 0 and remaining > 0:
-                        self.job.eta = remaining / self.job.speed
-                    else:
-                        self.job.eta = None
+            elapsed = time.time() - self._start_time
+            if elapsed > 0:
+                self.job.speed = self.job.processed_chars / elapsed
+                remaining = self.job.total_chars - self.job.processed_chars
+                if self.job.speed > 0 and remaining > 0:
+                    self.job.eta = remaining / self.job.speed
+                else:
+                    self.job.eta = None
 
         return "\n".join(translated)
 
@@ -168,6 +177,19 @@ def fail_job(job_id: str, error: str):
         job.error = str(error)
         job.status = "error"
         job.finished_at = time.time()
+
+
+def set_job_progress(job: FileTranslationJob | None, progress: float, eta=None):
+    """Set progress (0..100) and optionally eta outside the translate phase.
+
+    ``eta=None`` clears it so the UI does not show a stale "time left" while
+    the file-assembly phase is still working.
+    """
+    if job is None:
+        return
+    with job_store._lock:
+        job.progress = min(100.0, progress)
+        job.eta = eta
 
 
 def _argos_output_path(translation: ITranslation, filepath: str):
@@ -212,6 +234,8 @@ def run_file_job(job_id: str, translation: ITranslation, filepath: str, codec: s
     job = job_store.get_object(job_id)
     if job is None:
         return
+    with job_store._lock:
+        job.source_path = filepath
     try:
         with job_store._lock:
             job.total_chars = _compute_total_chars(translation, filepath, codec)
