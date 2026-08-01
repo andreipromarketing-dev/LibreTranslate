@@ -3,9 +3,6 @@
 var BaseUrl = window.location.protocol + "//" + window.location.host + "{{ url_prefix }}" ;
 var htmlRegex = /<(.*)>.*?|<(.*)\/>/;
 document.addEventListener('DOMContentLoaded', function(){
-    var sidenavElems = document.querySelectorAll('.sidenav');
-    var sidenavInstances = M.Sidenav.init(sidenavElems);
-
     var app = new Vue({
         el: '#app',
         delimiters: ['[[',']]'],
@@ -38,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function(){
             translationType: "text",
             showApiExample: false,
             inputFile: false,
+            isDragging: false,
             loadingFileTranslation: false,
             translatedFileUrl: false,
             fileJobId: false,
@@ -53,6 +51,10 @@ document.addEventListener('DOMContentLoaded', function(){
             fileCodecs: ["auto"],
             filePreview: false,
             filePreviewLoading: false,
+            saveDirHandle: null,
+            saveDirectoryName: "",
+            saveDirectoryError: "",
+            lastTranslatedFileUrl: "",
 
             apiSecret: "{{ bogus_api_secret }}"
         },
@@ -60,6 +62,16 @@ document.addEventListener('DOMContentLoaded', function(){
             const self = this;
             window._vueApp = self;
             self.$el.classList.add("loaded");
+
+            self.loadSaveDirectory().then(function(handle) {
+                if (handle) {
+                    self.saveDirHandle = handle;
+                    self.saveDirectoryName = handle.name;
+                    if (handle.requestPermission) {
+                        handle.requestPermission({ mode: "readwrite" }).catch(function() {});
+                    }
+                }
+            });
 
             const settingsRequest = new XMLHttpRequest();
             settingsRequest.open("GET", BaseUrl + "/frontend/settings", true);
@@ -117,9 +129,6 @@ document.addEventListener('DOMContentLoaded', function(){
         updated: function(){
             if (this.isSuggesting) return;
 
-            M.FormSelect.init(this.$refs.sourceLangDropdown);
-            M.FormSelect.init(this.$refs.targetLangDropdown);
-
             if (this.$refs.inputTextarea){
                 this.$refs.inputTextarea.focus()
 
@@ -163,6 +172,9 @@ document.addEventListener('DOMContentLoaded', function(){
             },
             supportedFilesFormatFormatted: function() {
                 return this.supportedFilesFormat.join(', ');
+            },
+            inputFileSizeText: function() {
+                return this.inputFile ? formatBytes(this.inputFile.size) : "";
             },
             isHtml: function(){
                 return htmlRegex.test(this.inputText);
@@ -366,7 +378,7 @@ document.addEventListener('DOMContentLoaded', function(){
                     try{
                         var res = JSON.parse(this.response);
                         if (res.success){
-                            M.toast({html: {{ _e("Thanks for your correction. Note the suggestion will not take effect right away.") }} })
+                            showToast({{ _e("Thanks for your correction. Note the suggestion will not take effect right away.") }})
                             self.closeSuggestTranslation(e)
                         }else{
                             throw new Error(res.error || {{ _e("Unknown error") }});
@@ -399,6 +411,18 @@ document.addEventListener('DOMContentLoaded', function(){
                 this.inputFile = e.target.files[0];
                 this.filePreview = false;
                 this.fileCodec = "auto";
+                if (e.target) e.target.value = "";
+            },
+            dropFile: function(e) {
+                e.preventDefault();
+                this.isDragging = false;
+                if (this.disableInput) return;
+                var files = e.dataTransfer && e.dataTransfer.files;
+                if (files && files.length) {
+                    this.inputFile = files[0];
+                    this.filePreview = false;
+                    this.fileCodec = "auto";
+                }
             },
             removeFile: function(e) {
               e.preventDefault()
@@ -579,14 +603,7 @@ document.addEventListener('DOMContentLoaded', function(){
                             if (job.status === "done") {
                                 if (job.translatedFileUrl) {
                                     self.translatedFileUrl = job.translatedFileUrl;
-
-                                    let link = document.createElement("a");
-                                    link.href = job.translatedFileUrl;
-                                    link.download = "";
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                    handleNotification("Translation Complete", "Finished translating " + self.inputFile.name + ".");
+                                    self.saveTranslatedFile(job.translatedFileUrl);
                                 } else {
                                     self.error = {{ _e("Cannot load %(url)s", url=url_prefix + "/translate_job") }};
                                     self.inputFile = false;
@@ -668,6 +685,173 @@ document.addEventListener('DOMContentLoaded', function(){
                     }
                 };
                 req.send();
+            },
+            chooseSaveDirectory: function() {
+                let self = this;
+                if (!window.showDirectoryPicker) {
+                    self.saveDirectoryError = {{ _e("Folder selection is supported only in Chromium-based browsers (Chrome, Edge, Opera, Comet).") }};
+                    return;
+                }
+                window.showDirectoryPicker({ id: "libretranslate-save-dir", mode: "readwrite" }).then(function(handle) {
+                    self.saveDirHandle = handle;
+                    self.saveDirectoryName = handle.name;
+                    self.saveDirectoryError = "";
+                    return self.storeSaveDirectory(handle);
+                }).catch(function(err) {
+                    if (err && err.name === "AbortError") return;
+                    self.saveDirectoryError = err && err.message ? err.message : String(err);
+                });
+            },
+            storeSaveDirectory: function(handle) {
+                return new Promise(function(resolve, reject) {
+                    const req = indexedDB.open("libretranslate", 1);
+                    req.onupgradeneeded = function() {
+                        req.result.createObjectStore("settings");
+                    };
+                    req.onsuccess = function() {
+                        const tx = req.result.transaction("settings", "readwrite");
+                        tx.objectStore("settings").put(handle, "saveDirHandle");
+                        tx.oncomplete = function() { resolve(); };
+                        tx.onerror = function() { reject(tx.error); };
+                    };
+                    req.onerror = function() { reject(req.error); };
+                });
+            },
+            loadSaveDirectory: function() {
+                return new Promise(function(resolve) {
+                    if (!window.indexedDB) { resolve(null); return; }
+                    const req = indexedDB.open("libretranslate", 1);
+                    req.onupgradeneeded = function() {
+                        req.result.createObjectStore("settings");
+                    };
+                    req.onsuccess = function() {
+                        const tx = req.result.transaction("settings", "readonly");
+                        const getReq = tx.objectStore("settings").get("saveDirHandle");
+                        getReq.onsuccess = function() { resolve(getReq.result || null); };
+                        getReq.onerror = function() { resolve(null); };
+                        tx.onerror = function() { resolve(null); };
+                    };
+                    req.onerror = function() { resolve(null); };
+                });
+            },
+            saveTranslatedFile: function(url) {
+                let self = this;
+                const fileName = url.split("/").pop() || "translated";
+                
+                // Store for "Open last translation" button
+                self.lastTranslatedFileUrl = url;
+                
+                const finish = function() {
+                    let link = document.createElement("a");
+                    link.href = url;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    // Show notification with save location
+                    let msg = "Finished translating " + self.inputFile.name + ".";
+                    if (self.saveDirHandle) {
+                        msg += " " + {{ _e("Saved to") }} + " " + self.saveDirHandle.name;
+                    } else {
+                        msg += " " + {{ _e("File downloaded to your default Downloads folder") }};
+                    }
+                    handleNotification("Translation Complete", msg);
+                };
+                
+                if (!self.saveDirHandle) {
+                    finish();
+                    return;
+                }
+                
+                fetch(url)
+                    .then(function(r) { return r.blob(); })
+                    .then(function(blob) {
+                        return self.saveDirHandle.getFileHandle(fileName, { create: true })
+                            .then(function(fileHandle) { return fileHandle.createWritable(); })
+                            .then(function(writable) {
+                                return writable.write(blob).then(function() { return writable.close(); });
+                            });
+                    })
+                    .then(function() {
+                        self.saveDirectoryError = "";
+                        handleNotification("Translation Complete", 
+                            "Finished translating " + self.inputFile.name + ". " + 
+                            {{ _e("Saved to") }} + " " + self.saveDirHandle.name);
+                    })
+                    .catch(function() {
+                        self.saveDirectoryError = {{ _e("Could not write to the selected folder, the file was downloaded instead.") }};
+                        finish();
+                    });
+            },
+            
+            openLastTranslation: function() {
+                if (this.lastTranslatedFileUrl) {
+                    window.open(this.lastTranslatedFileUrl, '_blank');
+                }
+            },
+
+            saveTranslationAs: function() {
+                let self = this;
+                if (!self.translatedFileUrl) return;
+
+                const url = self.translatedFileUrl;
+                const fileName = url.split("/").pop() || "translated.pdf";
+
+                // Force download via blob URL - works even if main save failed
+                fetch(url)
+                    .then(function(r) { return r.blob(); })
+                    .then(function(blob) {
+                        const blobUrl = URL.createObjectURL(blob);
+
+                        // Try File System Access API first (Chrome/Edge)
+                        if (window.showSaveFilePicker) {
+                            return window.showSaveFilePicker({
+                                suggestedName: fileName,
+                                types: [{
+                                    description: 'PDF Document',
+                                    accept: { 'application/pdf': ['.pdf'] }
+                                }]
+                            }).then(function(handle) {
+                                return handle.createWritable().then(function(writable) {
+                                    return writable.write(blob).then(function() {
+                                        writable.close();
+                                        URL.revokeObjectURL(blobUrl);
+                                        handleNotification("Saved", {{ _e("Saved to") }} + " " + handle.name);
+                                    });
+                                });
+                            }).catch(function() {
+                                // User cancelled or API failed - fallback to blob download
+                                self._forceBlobDownload(blobUrl, fileName);
+                            });
+                        }
+
+                        // Fallback: force blob download
+                        self._forceBlobDownload(blobUrl, fileName);
+                    })
+                    .catch(function(err) {
+                        console.error("Save translation as failed:", err);
+                        // Ultimate fallback: direct link click
+                        let link = document.createElement("a");
+                        link.href = url;
+                        link.download = fileName;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        handleNotification("Saved", {{ _e("File downloaded to your default Downloads folder") }});
+                    });
+            },
+
+            _forceBlobDownload: function(blobUrl, fileName) {
+                let link = document.createElement("a");
+                link.href = blobUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                // Revoke after a delay to ensure download starts
+                setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 10000);
+                handleNotification("Saved", {{ _e("File downloaded to your default Downloads folder") }});
             }
         }
     });
@@ -747,6 +931,31 @@ function formatFileEta(seconds) {
     return s + "s";
 }
 
+function formatBytes(bytes) {
+    if (!bytes && bytes !== 0) return "";
+    if (bytes === 0) return "0 B";
+    var units = ["B", "KB", "MB", "GB", "TB"];
+    var i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+    var val = bytes / Math.pow(1024, i);
+    return (i === 0 ? Math.round(val) : val.toFixed(1)) + " " + units[i];
+}
+
+function showToast(message) {
+    var toast = document.getElementById("toast");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "toast";
+        toast.className = "toast";
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add("is-visible");
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(function () {
+        toast.classList.remove("is-visible");
+    }, 3000);
+}
+
 /**
  * @param {object} langDropdown
  * @param {string} lang
@@ -782,20 +991,22 @@ function setApiKey(){
     }
 }
 
-// Color scheme handling
+// Color scheme handling (uses [data-theme] on <html>, stored in localStorage)
 function getPreferredColorScheme(){
   var systemScheme = 'light';
-  if(window.matchMedia('(prefers-color-scheme: dark)').matches){
+  if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){
     systemScheme = 'dark';
   }
   var chosenScheme = systemScheme;
 
-  if(localStorage.getItem("scheme")){
-    chosenScheme = localStorage.getItem("scheme");
-  }
+  try {
+    if(localStorage.getItem("scheme")){
+      chosenScheme = localStorage.getItem("scheme");
+    }
+  } catch(e) {}
 
   if(systemScheme === chosenScheme){
-    localStorage.removeItem("scheme");
+    try { localStorage.removeItem("scheme"); } catch(e) {}
   }
 
   return chosenScheme;
@@ -806,16 +1017,17 @@ function getPreferredColorScheme(){
 function savePreferredColorScheme(scheme){
   var systemScheme = 'light';
 
-  if(window.matchMedia('(prefers-color-scheme: dark)').matches){
+  if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){
     systemScheme = 'dark';
   }
 
-  if(systemScheme === scheme){
-    localStorage.removeItem("scheme");
-  } else {
-    localStorage.setItem("scheme", scheme);
-  }
-
+  try {
+    if(systemScheme === scheme){
+      localStorage.removeItem("scheme");
+    } else {
+      localStorage.setItem("scheme", scheme);
+    }
+  } catch(e) {}
 }
 
 // Get the current scheme, and apply the opposite
@@ -829,33 +1041,10 @@ function toggleColorScheme(){
   applyPreferredColorScheme(newScheme);
 }
 
-// Apply the chosen color scheme by traversing stylesheet rules, and applying a medium.
+// Apply the chosen color scheme by setting the data-theme attribute
 function applyPreferredColorScheme(scheme) {
-    for (var s = 0; s < document.styleSheets.length; s++) {
-        for (var i = 0; i < document.styleSheets[s].cssRules.length; i++) {
-            rule = document.styleSheets[s].cssRules[i];
-            if (rule && rule.media && rule.media.mediaText.includes("prefers-color-scheme")) {
-                switch (scheme) {
-                    case "light":
-                        rule.media.appendMedium("original-prefers-color-scheme");
-                        if (rule.media.mediaText.includes("light")) rule.media.deleteMedium("(prefers-color-scheme: light)");
-                        if (rule.media.mediaText.includes("dark")) rule.media.deleteMedium("(prefers-color-scheme: dark)");
-                        break;
-                    case "dark":
-                        rule.media.appendMedium("(prefers-color-scheme: light)");
-                        rule.media.appendMedium("(prefers-color-scheme: dark)");
-                        if (rule.media.mediaText.includes("original")) rule.media.deleteMedium("original-prefers-color-scheme");
-                        break;
-                    default:
-                        rule.media.appendMedium("(prefers-color-scheme: dark)");
-                        if (rule.media.mediaText.includes("light")) rule.media.deleteMedium("(prefers-color-scheme: light)");
-                        if (rule.media.mediaText.includes("original")) rule.media.deleteMedium("original-prefers-color-scheme");
-                        break;
-                }
-            }
-        }
-    }
-
+    if (scheme !== "light" && scheme !== "dark") scheme = "light";
+    document.documentElement.setAttribute("data-theme", scheme);
     savePreferredColorScheme(scheme);
 }
 

@@ -837,3 +837,59 @@ msgstr ""
 msgid "Continue translation"
 msgstr ""
 
+
+#: libretranslate/templates/index.html:287
+msgid "Select save folder"
+msgstr ""
+
+#: libretranslate/templates/index.html:288
+msgid "Save to"
+msgstr ""
+
+#: libretranslate/templates/app.js.template:640
+msgid "Folder selection is supported only in Chromium-based browsers (Chrome, Edge, Opera, Comet)."
+msgstr ""
+
+#: libretranslate/templates/app.js.template:662
+msgid "Saved to"
+msgstr ""
+
+#: libretranslate/templates/app.js.template:668
+msgid "Could not write to the selected folder, the file was downloaded instead."
+msgstr ""
+
+#: libretranslate/templates/index.html:278
+msgid "Drag & drop your file here"
+msgstr ""
+
+#: libretranslate/templates/index.html:279
+msgid "or"
+msgstr ""
+
+#: libretranslate/templates/index.html:280
+msgid "Browse file"
+msgstr ""
+
+#: libretranslate/templates/index.html:296
+msgid "Size"
+msgstr ""
+
+#: libretranslate/templates/index.html:296
+msgid "Speed"
+msgstr ""
+
+#: libretranslate/templates/index.html:296
+msgid "Loading"
+msgstr ""
+
+#: libretranslate/templates/app.js.template:746
+msgid "File downloaded to your default Downloads folder"
+msgstr ""
+
+#: libretranslate/templates/app.js.template:775
+msgid "Open last translation"
+msgstr ""
+
+#: libretranslate/templates/index.html:331
+msgid "Save translation as..."
+msgstr ""

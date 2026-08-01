@@ -816,6 +816,50 @@ msgstr "Продолжить перевод"
 msgid "Download"
 msgstr "Скачать"
 
+#: libretranslate/templates/index.html:287
+msgid "Select save folder"
+msgstr "Выбрать папку для сохранения"
+
+#: libretranslate/templates/index.html:288
+msgid "Save to"
+msgstr "Сохранить в"
+
+#: libretranslate/templates/app.js.template:640
+msgid "Folder selection is supported only in Chromium-based browsers (Chrome, Edge, Opera, Comet)."
+msgstr "Выбор папки поддерживается только в браузерах на основе Chromium (Chrome, Edge, Opera, Comet)."
+
+#: libretranslate/templates/app.js.template:662
+msgid "Saved to"
+msgstr "Сохранено в"
+
+#: libretranslate/templates/app.js.template:668
+msgid "Could not write to the selected folder, the file was downloaded instead."
+msgstr "Не удалось записать файл в выбранную папку, файл скачан вместо этого."
+
+#: libretranslate/templates/index.html:278
+msgid "Drag & drop your file here"
+msgstr "Перетащите файл сюда"
+
+#: libretranslate/templates/index.html:279
+msgid "or"
+msgstr "или"
+
+#: libretranslate/templates/index.html:280
+msgid "Browse file"
+msgstr "Выбрать файл"
+
+#: libretranslate/templates/index.html:296
+msgid "Size"
+msgstr "Размер"
+
+#: libretranslate/templates/index.html:296
+msgid "Speed"
+msgstr "Скорость"
+
+#: libretranslate/templates/index.html:296
+msgid "Loading"
+msgstr "Загрузка"
+
 #: libretranslate/templates/index.html:306
 msgid "Request"
 msgstr "Запрос"
@@ -845,6 +889,18 @@ msgstr "LibreTranslate"
 #: libretranslate/templates/index.html:349
 msgid "License:"
 msgstr "Лицензия:"
+
+#: libretranslate/templates/app.js.template:746
+msgid "File downloaded to your default Downloads folder"
+msgstr "Файл загружен в папку загрузок по умолчанию"
+
+#: libretranslate/templates/app.js.template:775
+msgid "Open last translation"
+msgstr "Открыть последний перевод"
+
+#: libretranslate/templates/index.html:331
+msgid "Save translation as..."
+msgstr "Сохранить перевод как..."
 
 #: libretranslate/templates/index.html:355
 #, python-format

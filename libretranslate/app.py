@@ -1329,9 +1329,29 @@ def create_app(args):
             return_data.write(fo.read())
         return_data.seek(0)
 
-        download_filename = filename.split('.')
-        download_filename.pop(0)
-        download_filename = '.'.join(download_filename)
+        # Generate user-friendly filename: original_translated.ext
+        # filename format: uuid_originalname.ext
+        download_filename = filename
+        if '_' in filename:
+            parts = filename.split('_', 1)
+            if len(parts) == 2:
+                original_with_ext = parts[1]
+                if '.' in original_with_ext:
+                    name_parts = original_with_ext.rsplit('.', 1)
+                    base = name_parts[0]
+                    ext = name_parts[1]
+                    download_filename = f"{base}_translated.{ext}"
+                else:
+                    download_filename = f"{original_with_ext}_translated"
+            else:
+                download_filename = f"translated.pdf"
+        else:
+            # Fallback
+            if '.' in filename:
+                ext = filename.rsplit('.', 1)[1]
+                download_filename = f"translated.{ext}"
+            else:
+                download_filename = f"translated.pdf"
 
         return send_file(return_data, as_attachment=True, download_name=download_filename)
 

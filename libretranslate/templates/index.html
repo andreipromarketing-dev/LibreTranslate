@@ -15,13 +15,23 @@
 
 	<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 
+	<script>
+		(function () {
+			var theme = 'light';
+			if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
+			try {
+				var stored = localStorage.getItem('scheme');
+				if (stored === 'light' || stored === 'dark') theme = stored;
+			} catch (e) {}
+			document.documentElement.setAttribute('data-theme', theme);
+		})();
+	</script>
+
 	<link rel="preload" href="{{ url_for('static', filename='icon.svg') }}" as="image" />
 	<link rel="preload" href="{{ url_for('static', filename='js/vue@2.js') }}" as="script">
-	<link rel="preload" href="{{ url_for('static', filename='js/materialize.min.js') }}" as="script">
 	<link rel="preload" href="{{ url_for('static', filename='js/prism.min.js') }}" as="script">
 	<link rel="preload" href="js/app.js?v={{ version }}" as="script">
 
-	<link rel="preload" href="{{ url_for('static', filename='css/materialize.min.css') }}" as="style"/>
 	<link rel="preload" href="{{ url_for('static', filename='css/material-icons.css') }}" as="style"/>
 	<link rel="preload" href="{{ url_for('static', filename='css/prism.min.css') }}" as="style"/>
 	<link rel="preload" href="{{ url_for('static', filename='css/main.css') }}?v={{ version }}" as="style"/>
@@ -34,9 +44,6 @@
 
 	<script src="{{ url_for('static', filename='js/vue@2.js') }}"></script>
 
-
-	<!-- Compiled and minified CSS -->
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/materialize.min.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/material-icons.css') }}" />
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/prism.min.css') }}" />
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v={{ version }}" />
@@ -45,401 +52,422 @@
 </head>
 
 <body>
-	<header>
-		<nav role="navigation">
-			<div class="nav-wrapper container">
-				<button data-target="nav-mobile" class="sidenav-trigger"><i class="material-icons">menu</i></button>
-				<a id="logo-container" href="{{ url_for('Main app.index') }}" class="brand-logo noline">
-					<img src="{{ url_for('static', filename='icon.svg') }}" alt="" class="logo">
-					<span>LibreTranslate</span>
-				</a>
-				<ul id="nav" class="right hide-on-med-and-down top-nav position-relative">
-					{% set menulinks %}
-					{% if not hide_api %}
-					<li><a href="{% if web_version %}https://docs.libretranslate.com{% else %}{{ swagger_url }}{% endif %}">{{ _h("API Docs") }}</a></li>
-					{% endif %}
-					{% if get_api_key_link %}
-					<li><a href="{{ get_api_key_link }}">{{ _h("Get API Key") }}</a></li>
-					{% endif %}
-					<li><a href="https://github.com/LibreTranslate/LibreTranslate" target="_blank" rel="noopener noreferrer">{{ _h("GitHub") }}</a></li>
-					{% if api_keys %}
-					<li><a class="noline" href="javascript:setApiKey()" title="{{ _h('Set API Key') }}" aria-label="{{ _h('Set API Key') }}"><i class="material-icons">vpn_key</i></a></li>
-					{% endif %}
-					<li class="change-language"><a class="noline" href="javascript:void(0)" title="{{ _h('Change language') }}"><i class="material-icons">language</i></a>
-					</li>
-					<li class="locale-panel">
-						<select id="locales" onchange="changeLocale(this)">
-							{% for l in available_locales %}<option value="{{ l['code'] }}" {{ 'selected' if current_locale == l['code'] else ''}}>{{ l['name'].capitalize() }}</option>{% endfor %}
-						</select>
-						<a href="https://hosted.weblate.org/projects/libretranslate/app/{{ current_locale }}/">{{ _h("Edit") }}<i class="material-icons">create</i></a>
-					</li>
-					<li class="change-theme"><a class="noline" href="javascript:toggleColorScheme()" title="{{ _h('Toggle dark/light mode') }}"><i class="material-icons">lightbulb_outline</i></a>
-					</li>
-					{% endset %}
-					{{ menulinks }}
-				</ul>
-				<ul id="nav-mobile" class="sidenav">
-					{{ menulinks }}
-				</ul>
-				<script>
-					var localeLinks = {
-						{% for al in alternate_locales %}"{{ al.lang }}": "{{ al.link }}"{% if not loop.last %},{% endif %}
-						{% endfor %}
-					};
+	<header class="site-header">
+		<div class="container header-inner">
+			<button type="button" class="nav-burger" data-target="nav-mobile" aria-label="{{ _h('Menu') }}">
+				<i class="material-icons">menu</i>
+			</button>
+			<a id="logo-container" href="{{ url_for('Main app.index') }}" class="brand-logo noline">
+				<img src="{{ url_for('static', filename='icon.svg') }}" alt="" class="logo">
+				<span>LibreTranslate</span>
+			</a>
+			<nav class="site-nav" aria-label="{{ _h('Main menu') }}">
+				{% set menulinks %}
+				{% if not hide_api %}
+				<a href="{% if web_version %}https://docs.libretranslate.com{% else %}{{ swagger_url }}{% endif %}" {% if web_version %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ _h("API Docs") }}</a>
+				{% endif %}
+				{% if get_api_key_link %}
+				<a href="{{ get_api_key_link }}" target="_blank" rel="noopener noreferrer">{{ _h("Get API Key") }}</a>
+				{% endif %}
+				<a href="https://github.com/LibreTranslate/LibreTranslate" target="_blank" rel="noopener noreferrer">{{ _h("GitHub") }}</a>
+				{% if api_keys %}
+				<a class="noline nav-icon-btn" href="javascript:setApiKey()" title="{{ _h('Set API Key') }}" aria-label="{{ _h('Set API Key') }}"><i class="material-icons">vpn_key</i></a>
+				{% endif %}
+				<button type="button" class="noline nav-icon-btn change-language" aria-label="{{ _h('Change language') }}"><i class="material-icons">language</i></button>
+				<div class="locale-panel">
+					<select id="locales" onchange="changeLocale(this)">
+						{% for l in available_locales %}<option value="{{ l['code'] }}" {{ 'selected' if current_locale == l['code'] else ''}}>{{ l['name'].capitalize() }}</option>{% endfor %}
+					</select>
+					<a href="https://hosted.weblate.org/projects/libretranslate/app/{{ current_locale }}/" target="_blank" rel="noopener noreferrer">{{ _h("Edit") }}<i class="material-icons">create</i></a>
+				</div>
+				<button type="button" class="noline nav-icon-btn change-theme" onclick="toggleColorScheme()" aria-label="{{ _h('Toggle dark/light mode') }}"><i class="material-icons">lightbulb_outline</i></button>
+				{% endset %}
+				{{ menulinks }}
+			</nav>
+		</div>
 
-					function changeLocale(slt){
-						var lang = slt.value;
-						if (localeLinks[lang]) location.href = localeLinks[lang];
-						else location.href = '?lang=' + slt.value;
-					}
-
-					var btnChangeLangs = document.getElementsByClassName("change-language");
-					var localePanels = document.getElementsByClassName("locale-panel");
-
-					for (var i = 0; i < btnChangeLangs.length; i++){
-						(function(btn){
-							btn.addEventListener('click', function(e){
-								e.stopPropagation();
-								btn.classList.toggle('clicked');
-							});
-						})(btnChangeLangs[i]);
-					}
-					for (var i = 0; i < localePanels.length; i++){
-						localePanels[i].addEventListener('click', function(e){
-							e.stopPropagation();
-						});
-					}
-					document.addEventListener('click', function(){
-						for (var i = 0; i < btnChangeLangs.length; i++){
-							btnChangeLangs[i].classList.remove('clicked');
-						}
-					});
-				</script>
+		<aside id="nav-mobile" class="drawer" aria-hidden="true">
+			<div class="drawer-head">
+				<span>LibreTranslate</span>
+				<button type="button" class="nav-icon-btn drawer-close" aria-label="{{ _h('Close') }}"><i class="material-icons">close</i></button>
 			</div>
-		</nav>
+			<div class="drawer-body">
+				{{ menulinks }}
+			</div>
+		</aside>
+		<div class="drawer-backdrop"></div>
+
+		<script>
+			var localeLinks = {
+				{% for al in alternate_locales %}"{{ al.lang }}": "{{ al.link }}"{% if not loop.last %},{% endif %}
+				{% endfor %}
+			};
+
+			function changeLocale(slt){
+				var lang = slt.value;
+				if (localeLinks[lang]) location.href = localeLinks[lang];
+				else location.href = '?lang=' + slt.value;
+			}
+
+			var btnChangeLangs = document.getElementsByClassName("change-language");
+			var localePanels = document.getElementsByClassName("locale-panel");
+
+			for (var i = 0; i < btnChangeLangs.length; i++){
+				(function(btn){
+					btn.addEventListener('click', function(e){
+						e.stopPropagation();
+						btn.classList.toggle('clicked');
+					});
+				})(btnChangeLangs[i]);
+			}
+			for (var i = 0; i < localePanels.length; i++){
+				localePanels[i].addEventListener('click', function(e){
+					e.stopPropagation();
+				});
+			}
+			document.addEventListener('click', function(){
+				for (var i = 0; i < btnChangeLangs.length; i++){
+					btnChangeLangs[i].classList.remove('clicked');
+				}
+			});
+
+			(function () {
+				var burger = document.querySelector('.nav-burger');
+				var drawer = document.getElementById('nav-mobile');
+				var backdrop = document.querySelector('.drawer-backdrop');
+				if (!burger || !drawer) return;
+
+				function closeDrawer(){
+					drawer.classList.remove('is-open');
+					document.body.classList.remove('drawer-open');
+				}
+
+				burger.addEventListener('click', function (e) {
+					e.stopPropagation();
+					drawer.classList.toggle('is-open');
+					document.body.classList.toggle('drawer-open');
+				});
+
+				var closes = drawer.querySelectorAll('.drawer-close');
+				for (var i = 0; i < closes.length; i++) closes[i].addEventListener('click', closeDrawer);
+				if (backdrop) backdrop.addEventListener('click', closeDrawer);
+				document.addEventListener('keydown', function (e) {
+					if (e.key === 'Escape') closeDrawer();
+				});
+			})();
+		</script>
 	</header>
 
 	<main id="app">
-	<div class="section no-pad-bot center" v-if="loading">
+	<div class="section center" v-if="loading">
 		<div class="container">
-			<div class="row">
-				<div class="preloader-wrapper active">
-				<div class="spinner-layer spinner-blue-only">
-					<div class="circle-clipper left">
-					<div class="circle"></div>
-					</div><div class="gap-patch">
-					<div class="circle"></div>
-					</div><div class="circle-clipper right">
-					<div class="circle"></div>
+			<div class="spinner"></div>
+			<p class="muted">{{ _h("Loading") }}…</p>
+		</div>
+	</div>
+
+	<div v-else-if="error" class="section component">
+		<div class="container">
+			<div class="card glass error-card">
+				<div class="card-body">
+					<div class="error-row">
+						<i class="material-icons">warning</i>
+						<span>[[ error ]]</span>
 					</div>
-				</div>
+					<button type="button" class="btn btn-outline" @click="dismissError">{{ _h("Dismiss") }}</button>
 				</div>
 			</div>
 		</div>
 	</div>
 
-	<div v-else-if="error" class="component">
-		<div class="section no-pad-bot">
-			<div class="container">
-				<div class="row">
-					<div class="col s12 m12">
-						<div class="card horizontal">
-							<div class="card-stacked">
-							<div class="card-content">
-								<i class="material-icons">warning</i><p> [[ error ]]</p>
-							</div>
-							<div class="card-action">
-								<a href="#" @click="dismissError">{{ _h("Dismiss") }}</a>
-							</div>
-							</div>
-						</div>
-					</div>
-				</div>
+	<div v-else class="section component">
+		<div class="container">
+			{% if under_attack %}
+			<div class="banner">
+				<i class="material-icons">warning</i>
+				<span>{{ _h("Due to bot abuse, translation requests are temporarily limited to users with a valid API key. Sorry for the inconvenience!") }}</span>
 			</div>
-		</div>
-	</div>
+			{% endif %}
 
-	<div v-else class="component">
-		<div class="section no-pad-bot">
-			<div class="container">
-				<div class="row">
-					{% if under_attack %}
-					<div class="card horizontal" style="z-index: -1;">
-						<div class="card-stacked">
-							<div class="card-content center">
-								<i class="material-icons" style="position: relative; top: 4px;">warning</i> {{ _h("Due to bot abuse, translation requests are temporarily limited to users with a valid API key. Sorry for the inconvenience!") }}</p>
-							</div>
-						</div>
-					</div>
+			<div class="hero">
+				<h3 class="hero-title">
+					{% if frontend_title %}
+					{{ frontend_title }}
+					{% else %}
+					{{ _h("Translation API") }}
 					{% endif %}
-					<h3 class="header center">
-						{% if frontend_title %}
-						{{ frontend_title }}
-						{% else %}
-						{{ _h("Translation API") }}
-						{% endif %}
-					</h3>
-					<div id="translation-type-btns" class="s12 center" v-if="filesTranslation === true">
-						<button type="button" class="btn btn-switch-type" @click="switchType('text')" :class="{'active': translationType === 'text'}" :disabled="disableInput">
-							<i aria-hidden="true" class="material-icons">title</i>
-							<span class="btn-text">{{ _h("Translate Text") }}</span>
-						</button>
-						<button type="button" class="btn btn-switch-type" @click="switchType('files')" :class="{'active': translationType === 'files'}" :disabled="disableInput">
-							<i aria-hidden="true" class="material-icons">description</i>
-							<span class="btn-text">{{ _h("Translate Files") }}</span>
-						</button>
-					</div>
-					<form id="translation-form" class="col s12">
-						<div class="row mb-0">
-							<div class="col s6 language-select">
-								<span id="sourceLangLabel">{{ _h("Translate from") }}</span>
-								<span v-if="detectedLangText !== ''">[[ detectedLangText ]]</span>
-								<select aria-labelledby="sourceLangLabel" class="browser-default" v-model="sourceLang" ref="sourceLangDropdown" @change="handleInput">
-									<template v-for="option in sourceLangs">
-										<option :value="option.code">[[ option.name ]]</option>
-									</template>
-								</select>
-							</div>
+				</h3>
+				<p class="hero-sub">{{ _h("Free and Open Source Machine Translation API") }}</p>
+			</div>
 
-							<div class="col s6 language-select">
-								<a href="javascript:void(0)" @click="swapLangs" class="btn-switch-language" aria-label="{{ _h('Swap source and target languages') }}">
-									<i class="material-icons">swap_horiz</i>
-								</a>
-								<span id="targetLangLabel">{{ _h("Translate into") }}</span>
-								<select aria-labelledby="targetLangLabel" class="browser-default" v-model="targetLang" ref="targetLangDropdown" @change="handleInput">
-									<template v-for="option in targetLangs">
-										<option v-if="option.code !== 'auto'" :value="option.code">[[ option.name ]]</option>
-									</template>
-								</select>
+			<div class="seg center" v-if="filesTranslation === true">
+				<button type="button" class="seg-btn" @click="switchType('text')" :class="{'is-active': translationType === 'text'}" :disabled="disableInput">
+					<i aria-hidden="true" class="material-icons">title</i>
+					<span class="btn-text">{{ _h("Translate Text") }}</span>
+				</button>
+				<button type="button" class="seg-btn" @click="switchType('files')" :class="{'is-active': translationType === 'files'}" :disabled="disableInput">
+					<i aria-hidden="true" class="material-icons">description</i>
+					<span class="btn-text">{{ _h("Translate Files") }}</span>
+				</button>
+			</div>
+
+			<form id="translation-form" class="translation-form" @submit.prevent>
+				<div class="card glass lang-card">
+					<div class="language-select">
+						<label id="sourceLangLabel">{{ _h("Translate from") }}</label>
+						<span v-if="detectedLangText !== ''" class="detected">[[ detectedLangText ]]</span>
+						<select aria-labelledby="sourceLangLabel" v-model="sourceLang" ref="sourceLangDropdown" @change="handleInput">
+							<template v-for="option in sourceLangs">
+								<option :value="option.code">[[ option.name ]]</option>
+							</template>
+						</select>
+					</div>
+
+					<button type="button" @click="swapLangs" class="swap-btn" aria-label="{{ _h('Swap source and target languages') }}">
+						<i class="material-icons">swap_horiz</i>
+					</button>
+
+					<div class="language-select">
+						<label id="targetLangLabel">{{ _h("Translate into") }}</label>
+						<select aria-labelledby="targetLangLabel" v-model="targetLang" ref="targetLangDropdown" @change="handleInput">
+							<template v-for="option in targetLangs">
+								<option v-if="option.code !== 'auto'" :value="option.code">[[ option.name ]]</option>
+							</template>
+						</select>
+					</div>
+				</div>
+
+				<div class="text-grid" v-if="translationType === 'text'">
+					<div class="card glass text-card">
+						<div class="textarea-wrap">
+							<label for="textarea1" class="sr-only">{{ _h("Text to translate") }}</label>
+							<textarea id="textarea1" :maxLength="charactersLimit" v-model="inputText" @input="handleInput" ref="inputTextarea" dir="auto" :disabled="disableInput" placeholder="{{ _h('Text to translate') }}"></textarea>
+						</div>
+						<div class="text-toolbar">
+							<div class="char-count" v-if="charactersLimit !== -1">[[ inputText.length ]] / [[ charactersLimit ]]</div>
+							<button type="button" class="icon-btn" title="{{ _h('Delete text') }}" aria-label="{{ _h('Delete text') }}" @click="deleteText">
+								<i class="material-icons">close</i>
+							</button>
+						</div>
+					</div>
+
+					<div class="card glass text-card">
+						<div class="textarea-wrap">
+							<label for="textarea2" class="sr-only">{{ _h("Translated text") }}</label>
+							<textarea id="textarea2" v-model="translatedText" ref="translatedTextarea" dir="auto" v-bind:readonly="suggestions && !isSuggesting" :disabled="disableInput" placeholder="{{ _h('Translated text') }}"></textarea>
+						</div>
+						<div class="text-toolbar">
+							<span></span>
+							<div class="actions">
+								<button v-if="suggestions && !loadingTranslation && inputText.length && !isSuggesting" type="button" class="icon-btn" @click="suggestTranslation" aria-label="{{ _h('Suggest translation') }}">
+									<i class="material-icons">edit</i>
+								</button>
+								<button v-if="suggestions && !loadingTranslation && inputText.length && isSuggesting" type="button" class="btn btn-outline btn-sm" @click="closeSuggestTranslation">
+									<span>{{ _h("Cancel") }}</span>
+								</button>
+								<button v-if="suggestions && !loadingTranslation && inputText.length && isSuggesting" type="button" class="btn btn-primary btn-sm" :disabled="!canSendSuggestion" @click="sendSuggestion">
+									<span>{{ _h("Send") }}</span>
+								</button>
+								<button v-if="!isSuggesting" type="button" class="icon-btn copy-btn" @click="copyText">
+									<span>[[ copyTextLabel ]]</span> <i class="material-icons" aria-hidden="true">content_copy</i>
+								</button>
+							</div>
+						</div>
+						<div class="translate-progress" v-if="loadingTranslation"><div class="bar"></div></div>
+					</div>
+				</div>
+
+				<div class="file-mode" v-if="translationType === 'files'">
+					<div class="card glass dropzone-card">
+						<div v-if="inputFile === false" class="dropzone" :class="{'is-dragging': isDragging}"
+							 @click="$refs.fileInputRef.click()"
+							 @dragenter.prevent="isDragging = true"
+							 @dragover.prevent="isDragging = true"
+							 @dragleave.prevent="isDragging = false"
+							 @drop.prevent="dropFile">
+							<input ref="fileInputRef" type="file" class="sr-only" :accept="supportedFilesFormatFormatted" @change="handleInputFile">
+							<div class="dropzone-inner">
+								<div class="dropzone-icon"><i class="material-icons">upload_file</i></div>
+								<p class="dropzone-title">{{ _h("Drag & drop your file here") }}</p>
+								<p class="dropzone-or">{{ _h("or") }}</p>
+								<button type="button" class="btn btn-primary">{{ _h("Browse file") }}</button>
+								<p class="dropzone-formats">{{ _h("Supported file formats:") }} [[ supportedFilesFormatFormatted ]]</p>
 							</div>
 						</div>
 
-						<div class="row" v-if="translationType === 'text'">
-							<div class="input-field textarea-container col s12 m6">
-								<label for="textarea1" class="sr-only">
-									{{ _h("Text to translate") }}
-								</label>
-								<textarea id="textarea1" :maxLength="charactersLimit" v-model="inputText" @input="handleInput" ref="inputTextarea" dir="auto" :disabled="disableInput"></textarea>
-								<button class="btn-delete-text" title="{{ _h('Delete text') }}" aria-label="{{ _h('Delete text') }}" @click="deleteText">
+						<div v-else class="file-selected">
+							<div class="file-card">
+								<div class="file-icon"><i class="material-icons">description</i></div>
+								<div class="file-meta">
+									<span class="file-name" :title="inputFile.name">[[ inputFile.name ]]</span>
+									<span class="file-size" v-if="inputFileSizeText !== ''">[[ inputFileSizeText ]]</span>
+								</div>
+								<button type="button" class="icon-btn" v-if="loadingFileTranslation !== true" @click="removeFile" aria-label="{{ _h('Remove file') }}">
 									<i class="material-icons">close</i>
 								</button>
-								<div class="characters-limit-container" v-if="charactersLimit !== -1">
-									<label>[[ inputText.length ]] / [[ charactersLimit ]]</label>
-								</div>
 							</div>
-							<div class="input-field textarea-container col s12 m6">
-								<label for="textarea2" class="sr-only">
-									{{ _h("Translated text") }}
-								</label>
-								<textarea id="textarea2" v-model="translatedText" ref="translatedTextarea" dir="auto" v-bind:readonly="suggestions && !isSuggesting" :disabled="disableInput"></textarea>
-									<div class="actions">
-										<button v-if="suggestions && !loadingTranslation && inputText.length && !isSuggesting" class="btn-action" @click="suggestTranslation" aria-label="{{ _h('Suggest translation') }}">
-											<i class="material-icons">edit</i>
-										</button>
-										<button v-if="suggestions && !loadingTranslation && inputText.length && isSuggesting" class="btn-action btn-blue" @click="closeSuggestTranslation">
-											<span>{{ _h("Cancel") }}</span>
-										</button>
-										<button v-if="suggestions && !loadingTranslation && inputText.length && isSuggesting" :disabled="!canSendSuggestion" class="btn-action btn-blue" @click="sendSuggestion">
-											<span>{{ _h("Send") }}</span>
-										</button>
-										<button v-if="!isSuggesting" class="btn-action btn-copy-translated" @click="copyText">
-											<span>[[ copyTextLabel ]]</span> <i class="material-icons" aria-hidden="true">content_copy</i>
-										</button>
-									</div>
-								<div class="position-relative">
-									<div class="progress translate" v-if="loadingTranslation">
-										<div class="indeterminate"></div>
-									</div>
-								</div>
-							</div>
-						</div>
-						<div class="row" v-if="translationType === 'files'">
-							<div class="file-dropzone">
-								<div v-if="inputFile === false" class="dropzone-content">
-									<span>{{ _h("Supported file formats:") }} [[ supportedFilesFormatFormatted ]]</span>
-									<form action="#">
-										<div class="file-field input-field">
-											<div class="btn">
-												<span id="fileLabel">{{ _h("File") }}</span>
-												<input aria-labelledby="fileLabel" type="file" :accept="supportedFilesFormatFormatted" @change="handleInputFile" ref="fileInputRef">
-											</div>
-											<div class="file-path-wrapper hidden">
-												<input class="file-path validate" type="text">
-											</div>
-										</div>
-									</form>
-								</div>
-								<div v-if="inputFile !== false" class="dropzone-content">
-									<div class="card">
-										<div class="card-content">
-											<div class="row mb-0">
-												<div class="col s12">
-													[[ inputFile.name ]]
-													<button v-if="loadingFileTranslation !== true" @click="removeFile" class="btn-flat" aria-label="{{ _h('Remove file') }}">
-														<i class="material-icons">close</i>
-													</button>
-												</div>
-											</div>
-										</div>
-									</div>
-								<button @click="previewFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Preview") }}</button>
-								<button @click="translateFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Translate") }}</button>
-								<a v-if="translatedFileUrl !== false" :href="translatedFileUrl" class="btn">{{ _h("Download") }}</a>
-								<div class="file-job" v-if="loadingFileTranslation">
-									<div class="file-job-head">
-										<span class="file-job-file" :title="inputFile.name">[[ inputFile.name ]]</span>
-										<span class="file-job-status" :class="fileJobPaused ? 'is-paused' : 'is-running'">
-											<i class="material-icons" aria-hidden="true">[[ fileJobPaused ? 'pause' : 'cached' ]]</i>
-											<span v-if="fileJobPaused">{{ _h("Paused") }}</span>
-											<span v-else>{{ _h("Translating") }}</span>
-										</span>
-									</div>
-									<div class="file-progress-track" :class="fileJobPaused ? 'is-paused' : ''">
-										<div class="file-progress-fill" :style="{width: fileProgress + '%'}"></div>
-									</div>
-									<div class="file-job-meta">
-										<span class="file-job-percent">[[ fileProgressText ]]</span>
-										<span class="file-job-sub">
-											<span v-if="fileSpeedText !== ''">[[ fileSpeedText ]]</span>
-											<span v-if="fileEtaText !== ''"> · {{ _h("Time left") }} ~[[ fileEtaText ]]</span>
-										</span>
-									</div>
-									<div class="file-translation-controls">
-										<button @click="pauseFileJob" v-if="fileJobPaused === false" class="btn btn-small btn-file-outline">{{ _h("Pause") }}</button>
-										<button @click="resumeFileJob" v-if="fileJobPaused === true" class="btn btn-small btn-file-primary">{{ _h("Resume") }}</button>
-										<button @click="stopFileJob" class="btn btn-small btn-file-danger">{{ _h("Stop") }}</button>
-									</div>
-								</div>
-								</div>
-							</div>
-						</div>
-						<div v-if="filePreview !== false" class="file-preview-overlay">
-							<div class="file-preview-modal card">
-								<div class="card-content">
-									<div class="row mb-0">
-										<div class="col s12 file-preview-head">
-											<span class="file-preview-title">{{ _h("Preview") }}: [[ inputFile.name ]]</span>
-											<button class="btn-flat" @click="closeFilePreview" aria-label="{{ _h('Close') }}">
-												<i class="material-icons">close</i>
-											</button>
-										</div>
-									</div>
-								<div v-if="filePreviewLoading" class="progress file-progress">
-									<div class="indeterminate"></div>
-								</div>
-									<div v-if="!filePreviewLoading && filePreview" class="row">
-										<div class="col s12 m6">
-											<div class="input-field">
-												<label>{{ _h("Source") }}</label>
-												<textarea readonly class="file-preview-textarea" :value="filePreview.sourceSample"></textarea>
-											</div>
-										</div>
-										<div class="col s12 m6">
-											<div class="input-field">
-												<label>{{ _h("Translation") }}</label>
-												<textarea readonly class="file-preview-textarea" :value="filePreview.translatedSample"></textarea>
-											</div>
-										</div>
-									</div>
-									<div v-if="!filePreviewLoading && filePreview" class="row">
-										<div class="col s12 file-preview-meta">
-											<span v-if="filePreview.detectedLanguage" class="file-preview-meta-item">{{ _h("Detected language:") }} <strong>[[ filePreview.detectedLanguage ]]</strong></span>
-											<span v-if="filePreview.isTextFile && filePreview.codec" class="file-preview-meta-item">{{ _h("Detected codec:") }} <strong>[[ filePreview.codec ]]</strong></span>
-											<span v-if="!filePreview.isTextFile" class="file-preview-meta-item">{{ _h("This file format is not text, the codec does not apply.") }}</span>
-										</div>
-									</div>
-									<div v-if="!filePreviewLoading" class="row mb-0">
-										<div class="col s12 file-preview-controls">
-											<div class="input-field file-preview-codec">
-												<select v-model="fileCodec" class="browser-default" :disabled="!filePreview" @change="changeFileCodec">
-													<option v-for="c in fileCodecs" :value="c" :key="c">[[ c ]]</option>
-												</select>
-												<label>{{ _h("Codec") }}</label>
-											</div>
-											<button class="btn" @click="changeFileCodec" :disabled="filePreviewLoading || !filePreview">{{ _h("Change codec") }}</button>
-											<button class="btn" @click="continueFileTranslation" :disabled="filePreviewLoading || !filePreview">{{ _h("Continue translation") }}</button>
-										</div>
-									</div>
-								</div>
-							</div>
-						</div>
-					</form>
-				</div>
-			</div>
-		</div>
 
-		{% if not hide_api %}
-		<div class="section no-pad-bot" v-if="translationType !== 'files'">
-			<div class="container">
-				<div class="row center">
-					<div class="col s12 m12">
+							<div class="file-actions" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false">
+								<button type="button" class="btn btn-outline" @click="previewFile">{{ _h("Preview") }}</button>
+								<button type="button" class="btn btn-primary" @click="translateFile">{{ _h("Translate") }}</button>
+							</div>
 
-					<button @click="toggleApiExample" class="btn">{{ _h("Show API example") }}</button>
+							<div class="file-actions" v-if="translatedFileUrl === false && loadingFileTranslation === false">
+								<button type="button" class="btn btn-outline" @click="chooseSaveDirectory" v-if="filesTranslation">
+									<i class="material-icons" aria-hidden="true">create_new_folder</i> {{ _h("Select save folder") }}
+								</button>
+								<div class="file-save-dir" v-if="saveDirectoryName !== ''">
+									<i class="material-icons" aria-hidden="true">folder</i>
+									<span>{{ _h("Save to") }}: [[ saveDirectoryName ]]</span>
+								</div>
+								<div class="file-save-dir file-save-dir-error" v-if="saveDirectoryError !== ''">[[ saveDirectoryError ]]</div>
+							</div>
 
-					<div class="row center code-row-wrapper" v-if="showApiExample">
-						<div class="col s12 m12 l6 left-align code-box">
-							<p class="mb-0">{{ _h("Request") }}</p>
-							<pre class="code mt-0"><code class="language-javascript" v-html="$options.filters.highlight(requestCode)">
-							</code></pre>
-						</div>
-						<div class="col s12 m12 l6 left-align code-box">
-							<p class="mb-0">{{ _h("Response") }}</p>
-							<pre class="code mt-0"><code class="language-javascript" v-html="$options.filters.highlight(output)">
-							</code></pre>
+							<div class="file-done" v-if="translatedFileUrl !== false && loadingFileTranslation === false">
+								<div class="file-done-actions">
+									<a :href="translatedFileUrl" class="btn btn-primary btn-lg" download>{{ _h("Download") }}</a>
+									<button type="button" class="btn btn-outline btn-lg" @click="openLastTranslation" v-if="lastTranslatedFileUrl">
+										<i class="material-icons" aria-hidden="true">folder_open</i> {{ _h("Open last translation") }}
+									</button>
+									<button type="button" class="btn btn-secondary btn-lg" @click="saveTranslationAs" v-if="translatedFileUrl">
+										<i class="material-icons" aria-hidden="true">save_alt</i> {{ _h("Save translation as...") }}
+									</button>
+								</div>
+							</div>
+
+							<div class="file-job" v-if="loadingFileTranslation">
+								<div class="file-job-head">
+									<span class="file-job-file" :title="inputFile.name">[[ inputFile.name ]]</span>
+									<span class="file-job-status" :class="fileJobPaused ? 'is-paused' : 'is-running'">
+										<i class="material-icons" aria-hidden="true">[[ fileJobPaused ? 'pause' : 'cached' ]]</i>
+										<span v-if="fileJobPaused">{{ _h("Paused") }}</span>
+										<span v-else>{{ _h("Translating") }}</span>
+									</span>
+								</div>
+								<div class="file-progress-track" :class="fileJobPaused ? 'is-paused' : ''">
+									<div class="file-progress-fill" :style="{width: fileProgress + '%'}"></div>
+								</div>
+								<div class="file-job-meta">
+									<span class="file-job-percent">[[ fileProgressText ]]</span>
+									<span class="file-job-sub">
+										<span v-if="fileSpeedText !== ''">[[ fileSpeedText ]]</span>
+										<span v-if="fileEtaText !== ''"> · {{ _h("Time left") }} ~[[ fileEtaText ]]</span>
+									</span>
+								</div>
+								<div class="file-translation-controls">
+									<button type="button" @click="pauseFileJob" v-if="fileJobPaused === false" class="btn btn-sm btn-outline">{{ _h("Pause") }}</button>
+									<button type="button" @click="resumeFileJob" v-if="fileJobPaused === true" class="btn btn-sm btn-primary">{{ _h("Resume") }}</button>
+									<button type="button" @click="stopFileJob" class="btn btn-sm btn-danger">{{ _h("Stop") }}</button>
+								</div>
+							</div>
 						</div>
 					</div>
 
-					</div>
-				</div>
-			</div>
-		</div>
-		{% endif %}
-		{% if web_version %}
-		<div class="section no-pad-bot">
-			<div class="container">
-				<div class="row center">
-					<div class="col s12 m12">
-						<h3 class="header">{{ _h("Open Source Machine Translation API") }}</h3>
-						<h4 class="header">{{ _h("Free to download. Offline Capable. Easy to Setup.") }}</h4>
-						<div id="download-btn-wrapper">
-							<a id="download-btn" class="waves-effect waves-light btn btn-large teal darken-2" href="https://github.com/LibreTranslate/LibreTranslate" rel="noopener noreferrer">
-								<i aria-hidden="true" class="material-icons">cloud_download</i>
-								<span class="btn-text">{{ _h("Download") }}</span>
-							</a>
+					<div v-if="filePreview !== false" class="modal-overlay" @click.self="closeFilePreview">
+						<div class="modal card glass" role="dialog" aria-modal="true" aria-label="{{ _h('Preview') }}">
+							<div class="modal-head">
+								<span class="modal-title">{{ _h("Preview") }}: [[ inputFile.name ]]</span>
+								<button type="button" class="icon-btn" @click="closeFilePreview" aria-label="{{ _h('Close') }}">
+									<i class="material-icons">close</i>
+								</button>
+							</div>
+							<div class="modal-body">
+								<div class="preview-progress" v-if="filePreviewLoading">
+									<div class="spinner"></div>
+								</div>
+								<div class="preview-grid" v-if="!filePreviewLoading && filePreview">
+									<div class="preview-col">
+										<label class="preview-label">{{ _h("Source") }}</label>
+										<textarea readonly class="preview-textarea" :value="filePreview.sourceSample"></textarea>
+									</div>
+									<div class="preview-col">
+										<label class="preview-label">{{ _h("Translation") }}</label>
+										<textarea readonly class="preview-textarea" :value="filePreview.translatedSample"></textarea>
+									</div>
+								</div>
+								<div class="preview-meta" v-if="!filePreviewLoading && filePreview">
+									<span v-if="filePreview.detectedLanguage" class="preview-meta-item">{{ _h("Detected language:") }} <strong>[[ filePreview.detectedLanguage ]]</strong></span>
+									<span v-if="filePreview.isTextFile && filePreview.codec" class="preview-meta-item">{{ _h("Detected codec:") }} <strong>[[ filePreview.codec ]]</strong></span>
+									<span v-if="!filePreview.isTextFile" class="preview-meta-item">{{ _h("This file format is not text, the codec does not apply.") }}</span>
+								</div>
+								<div class="preview-controls" v-if="!filePreviewLoading">
+									<div class="codec-select">
+										<label for="fileCodec">{{ _h("Codec") }}</label>
+										<select id="fileCodec" v-model="fileCodec" :disabled="!filePreview" @change="changeFileCodec">
+											<option v-for="c in fileCodecs" :value="c" :key="c">[[ c ]]</option>
+										</select>
+									</div>
+									<button type="button" class="btn btn-outline" @click="changeFileCodec" :disabled="filePreviewLoading || !filePreview">{{ _h("Change codec") }}</button>
+									<button type="button" class="btn btn-primary" @click="continueFileTranslation" :disabled="filePreviewLoading || !filePreview">{{ _h("Continue translation") }}</button>
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>
-			</div>
+			</form>
 		</div>
-		{% endif %}
 	</div>
+
+	{% if not hide_api %}
+	<div class="section component">
+		<div class="container">
+			<div class="api-section center" v-if="translationType !== 'files'">
+				<button type="button" class="btn btn-outline" @click="toggleApiExample">{{ _h("Show API example") }}</button>
+				<div class="code-grid" v-if="showApiExample">
+					<div class="code-box">
+						<p class="mb-0 code-label">{{ _h("Request") }}</p>
+						<pre class="code mt-0"><code class="language-javascript" v-html="$options.filters.highlight(requestCode)"></code></pre>
+					</div>
+					<div class="code-box">
+						<p class="mb-0 code-label">{{ _h("Response") }}</p>
+						<pre class="code mt-0"><code class="language-javascript" v-html="$options.filters.highlight(output)"></code></pre>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	{% if web_version %}
+	<div class="section component">
+		<div class="container center">
+			<h3 class="hero-title">{{ _h("Open Source Machine Translation API") }}</h3>
+			<h4 class="hero-sub">{{ _h("Free to download. Offline Capable. Easy to Setup.") }}</h4>
+			<div class="download-wrap">
+				<a id="download-btn" class="btn btn-primary btn-lg" href="https://github.com/LibreTranslate/LibreTranslate" target="_blank" rel="noopener noreferrer">
+					<i aria-hidden="true" class="material-icons">cloud_download</i>
+					<span class="btn-text">{{ _h("Download") }}</span>
+				</a>
+			</div>
+		</div>
+	</div>
+	{% endif %}
 	</main>
 
-	<footer class="page-footer">
+	<footer class="site-footer">
 		<div class="container">
-			<div class="row">
-				<div class="col l12 s12">
-					<h5 class="white-text">{{ _h("LibreTranslate") }} <span style="font-size: 16px">v{{ version }}</span></h5>
-					<p class="grey-text text-lighten-4">{{ _h("Free and Open Source Machine Translation API") }}</p>
-					<p>{{ _h("License:") }} <a class="grey-text text-lighten-4" href="https://www.gnu.org/licenses/agpl-3.0.en.html" rel="noopener noreferrer">AGPLv3</a></p>
+			<div class="footer-top">
+				<div>
+					<h5 class="footer-title">{{ _h("LibreTranslate") }} <span class="footer-version">v{{ version }}</span></h5>
+					<p class="muted">{{ _h("Free and Open Source Machine Translation API") }}</p>
+				</div>
+				<div>
+					<p class="muted">{{ _h("License:") }} <a href="https://www.gnu.org/licenses/agpl-3.0.en.html" target="_blank" rel="noopener noreferrer">AGPLv3</a></p>
 				</div>
 			</div>
-		</div>
-		<div class="footer-copyright center">
-			<p class="white-text">
-				{{ _h("Made with %(heart)s by %(contributors)s and powered by %(engine)s", heart='❤', contributors='<a class="white-text" href="https://github.com/LibreTranslate/LibreTranslate/graphs/contributors" rel="noopener noreferrer">%s</a>' % _h("%(libretranslate)s Contributors", libretranslate="LibreTranslate"), engine='<a class="white-text text-lighten-3" href="https://github.com/argosopentech/argos-translate/" rel="noopener noreferrer">Argos Translate</a>') }}
-			</p>
+			<div class="footer-bottom">
+				{{ _h("Made with %(heart)s by %(contributors)s and powered by %(engine)s", heart='❤', contributors='<a href="https://github.com/LibreTranslate/LibreTranslate/graphs/contributors" target="_blank" rel="noopener noreferrer">%s</a>' % _h("%(libretranslate)s Contributors", libretranslate="LibreTranslate"), engine='<a href="https://github.com/argosopentech/argos-translate/" target="_blank" rel="noopener noreferrer">Argos Translate</a>') }}
+			</div>
 		</div>
 	</footer>
 
-	<script src="{{ url_for('static', filename='js/materialize.min.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/prism.min.js') }}"></script>
 	<script>
 	// @license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-3.0
 	window.Prism = window.Prism || {};
 	window.Prism.manual = true;
 	// @license-end
 	</script>
-	<script src="{{ url_for('static', filename='js/prism.min.js') }}"></script>
 	<script src="js/app.js?v={{ version }}"></script>
 </body>
 </html>
