@@ -3,6 +3,7 @@ import math
 import os
 import re
 import tempfile
+import threading
 import uuid
 import sys
 import warnings
@@ -22,7 +23,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.http import http_date
 from werkzeug.utils import secure_filename
 
-from libretranslate import flood, remove_translated_files, scheduler, secret, security, storage, cache
+from libretranslate import flood, pdf_file, progress, remove_translated_files, scheduler, secret, security, storage, cache, text_file
 from libretranslate.language import model2iso, iso2model, detect_languages, improve_translation_formatting, get_language_with_fallback
 from libretranslate.locales import (
     _,
@@ -34,6 +35,7 @@ from libretranslate.locales import (
     gettext_html,
     lazy_swag,
 )
+from libretranslate.progress import ProgressTranslation, job_store
 
 from .api_keys import Database, RemoteDatabase
 from .suggestions import Database as SuggestionsDatabase
@@ -435,6 +437,10 @@ def create_app(args):
     @bp.errorhandler(403)
     def denied(e):
         return jsonify({"error": str(e.description)}), 403
+
+    @bp.errorhandler(404)
+    def not_found(e):
+        return jsonify({"error": str(e.description)}), 404
 
     @bp.route("/")
     @limiter.exempt
@@ -915,16 +921,23 @@ def create_app(args):
               example: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
             required: false
             description: API key
+          - in: formData
+            name: codec
+            schema:
+              type: string
+              example: auto
+            required: false
+            description: Source encoding for text files ("auto" for auto-detection)
         responses:
           200:
-            description: Translated file
+            description: File translation started
             schema:
               id: translate-file
               type: object
               properties:
-                translatedFileUrl:
+                jobId:
                   type: string
-                  description: Translated file url
+                  description: Id of the file translation job, poll /translate_job/{jobId} for progress
           400:
             description: Invalid request
             schema:
@@ -967,6 +980,7 @@ def create_app(args):
 
         source_lang = iso2model(request.form.get("source"))
         target_lang = iso2model(request.form.get("target"))
+        codec = request.form.get("codec", "auto")
         file = request.files['file']
         char_limit = get_char_limit(args.char_limit, api_keys_db)
 
@@ -983,48 +997,316 @@ def create_app(args):
         if os.path.splitext(file.filename)[1] not in frontend_argos_supported_files_format:
             abort(400, description=_("Invalid request: file format not supported"))
 
-        src_lang = next((l for l in languages if l.code == source_lang), None)
+        if not text_file.is_supported_codec(codec):
+            abort(400, description=_("Invalid request: unknown codec"))
 
-        if src_lang is None and source_lang != "auto":
-            abort(400, description=_("%(lang)s is not supported", lang=source_lang))
+        if source_lang != "auto":
+            src_lang = next((l for l in languages if l.code == source_lang), None)
+
+            if src_lang is None:
+                abort(400, description=_("%(lang)s is not supported", lang=source_lang))
 
         tgt_lang = next((l for l in languages if l.code == target_lang), None)
 
         if tgt_lang is None:
             abort(400, description=_("%(lang)s is not supported", lang=target_lang))
 
+        filename = str(uuid.uuid4()) + '.' + secure_filename(file.filename)
+        filepath = os.path.join(get_upload_dir(), filename)
+
+        file.save(filepath)
+
+        # Not an exact science: take the number of bytes and divide by
+        # the character limit. Assuming a plain text file, this will
+        # set the cost of the request to N = bytes / char_limit, which is
+        # roughly equivalent to a batch process of N batches assuming
+        # each batch uses all available limits
+        if char_limit > 0:
+            request.req_cost = max(1, int(os.path.getsize(filepath) / char_limit))
+
+        def run_file_translation(job_id, source_lang_code, target_lang_code, filepath, codec):
+            try:
+                if source_lang_code == "auto":
+                    if text_file.is_text_file(filepath):
+                        src_texts, _ = text_file.get_texts(filepath, codec)
+                    elif pdf_file.is_pdf_file(filepath):
+                        src_texts = pdf_file.get_texts(filepath)
+                    else:
+                        src_texts = argostranslatefiles.get_texts(filepath)
+                    candidate_langs = detect_languages(src_texts)
+                    detected_src_lang = candidate_langs[0]
+                    src_lang = get_language_with_fallback(
+                        detected_src_lang["language"], languages
+                    )
+                    if src_lang is None:
+                        raise Exception(
+                            _("%(lang)s is not supported", lang=detected_src_lang["language"])
+                        )
+                else:
+                    src_lang = next(
+                        (l for l in languages if l.code == source_lang_code), None
+                    )
+
+                if src_lang is None:
+                    raise Exception(
+                        _("%(lang)s is not supported", lang=source_lang_code)
+                    )
+
+                tgt_lang = next(
+                    (l for l in languages if l.code == target_lang_code), None
+                )
+                if tgt_lang is None:
+                    raise Exception(
+                        _("%(lang)s is not supported", lang=target_lang_code)
+                    )
+
+                translation = src_lang.get_translation(tgt_lang)
+                if translation is None:
+                    raise Exception(
+                        _(
+                            "%(tname)s (%(tcode)s) is not available as a target language from %(sname)s (%(scode)s)",
+                            tname=_lazy(tgt_lang.name),
+                            tcode=tgt_lang.code,
+                            sname=_lazy(src_lang.name),
+                            scode=src_lang.code,
+                        )
+                    )
+
+                job = job_store.get_object(job_id)
+                if job is None:
+                    return
+
+                progress_translation = ProgressTranslation(translation, job)
+                progress.run_file_job(job_id, progress_translation, filepath, codec)
+            except Exception as e:
+                progress.fail_job(job_id, e)
+
+        job = job_store.create(str(uuid.uuid4()))
+        threading.Thread(
+            target=run_file_translation,
+            args=(job.job_id, source_lang, target_lang, filepath, codec),
+            daemon=True,
+        ).start()
+
+        return jsonify({"jobId": job.job_id})
+
+    @bp.post("/preview_file")
+    @access_check
+    def preview_file():
+        """
+        Preview a File Translation
+        ---
+        tags:
+          - translate
+        consumes:
+         - multipart/form-data
+        parameters:
+          - in: formData
+            name: file
+            type: file
+            required: true
+            description: File to preview
+          - in: formData
+            name: source
+            schema:
+              type: string
+              example: en
+            required: true
+            description: Source language code or "auto" for auto detection
+          - in: formData
+            name: target
+            schema:
+              type: string
+              example: ru
+            required: true
+            description: Target language code
+          - in: formData
+            name: api_key
+            schema:
+              type: string
+              example: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+            required: false
+            description: API key
+          - in: formData
+            name: codec
+            schema:
+              type: string
+              example: auto
+            required: false
+            description: Source encoding for text files ("auto" for auto-detection)
+        responses:
+          200:
+            description: File preview
+            schema:
+              id: preview-file
+              type: object
+              properties:
+                sourceSample:
+                  type: string
+                  description: Sample of the source text
+                translatedSample:
+                  type: string
+                  description: Translation of the source sample
+                codec:
+                  type: string
+                  description: Resolved source encoding
+                detectedLanguage:
+                  type: string
+                  description: Detected source language (when source is "auto")
+                isTextFile:
+                  type: boolean
+                  description: Whether the file was handled as a plain-text format
+          400:
+            description: Invalid request
+            schema:
+              id: error-response
+              type: object
+              properties:
+                error:
+                  type: string
+                  description: Error message
+          500:
+            description: Translation error
+            schema:
+              id: error-response
+              type: object
+              properties:
+                error:
+                  type: string
+                  description: Error message
+          429:
+            description: Slow down
+            schema:
+              id: error-slow-down
+              type: object
+              properties:
+                error:
+                  type: string
+                  description: Reason for slow down
+          403:
+            description: Banned
+            schema:
+              id: error-response
+              type: object
+              properties:
+                error:
+                  type: string
+                  description: Error message
+        """
+        if args.disable_files_translation:
+            abort(403, description=_("Files translation are disabled on this server."))
+
+        source_lang = iso2model(request.form.get("source"))
+        target_lang = iso2model(request.form.get("target"))
+        codec = request.form.get("codec", "auto")
+        file = request.files['file']
+
+        if not file:
+            abort(400, description=_("Invalid request: missing %(name)s parameter", name='file'))
+        if not source_lang:
+            abort(400, description=_("Invalid request: missing %(name)s parameter", name='source'))
+        if not target_lang:
+            abort(400, description=_("Invalid request: missing %(name)s parameter", name='target'))
+
+        if file.filename == '':
+            abort(400, description=_("Invalid request: empty file"))
+
+        if os.path.splitext(file.filename)[1] not in frontend_argos_supported_files_format:
+            abort(400, description=_("Invalid request: file format not supported"))
+
+        if not text_file.is_supported_codec(codec):
+            abort(400, description=_("Invalid request: unknown codec"))
+
+        if source_lang != "auto":
+            src_lang = next((l for l in languages if l.code == source_lang), None)
+
+            if src_lang is None:
+                abort(400, description=_("%(lang)s is not supported", lang=source_lang))
+
+        tgt_lang = next((l for l in languages if l.code == target_lang), None)
+
+        if tgt_lang is None:
+            abort(400, description=_("%(lang)s is not supported", lang=target_lang))
+
+        filename = str(uuid.uuid4()) + '.' + secure_filename(file.filename)
+        filepath = os.path.join(get_upload_dir(), filename)
+
+        file.save(filepath)
+
         try:
-            filename = str(uuid.uuid4()) + '.' + secure_filename(file.filename)
-            filepath = os.path.join(get_upload_dir(), filename)
-
-            file.save(filepath)
-
-            # Not an exact science: take the number of bytes and divide by
-            # the character limit. Assuming a plain text file, this will
-            # set the cost of the request to N = bytes / char_limit, which is
-            # roughly equivalent to a batch process of N batches assuming
-            # each batch uses all available limits
-            if char_limit > 0:
-                request.req_cost = max(1, int(os.path.getsize(filepath) / char_limit))
+            is_text = text_file.is_text_file(filepath)
+            if is_text:
+                src_sample, used_codec = text_file.get_texts(filepath, codec)
+            elif pdf_file.is_pdf_file(filepath):
+                src_sample = pdf_file.get_texts(filepath)
+                used_codec = None
+            else:
+                src_sample = argostranslatefiles.get_texts(filepath)
+                used_codec = None
 
             if source_lang == "auto":
-                src_texts = argostranslatefiles.get_texts(filepath)
-                candidate_langs = detect_languages(src_texts)
+                candidate_langs = detect_languages(src_sample)
                 detected_src_lang = candidate_langs[0]
-                src_lang = get_language_with_fallback(detected_src_lang["language"], languages)
+                src_lang = get_language_with_fallback(
+                    detected_src_lang["language"], languages
+                )
                 if src_lang is None:
-                    abort(400, description=_("%(lang)s is not supported", lang=detected_src_lang["language"]))
+                    raise Exception(
+                        _("%(lang)s is not supported", lang=detected_src_lang["language"])
+                    )
+            else:
+                src_lang = next(
+                    (l for l in languages if l.code == source_lang), None
+                )
 
-            translated_file_path = argostranslatefiles.translate_file(src_lang.get_translation(tgt_lang), filepath)
-            translated_filename = os.path.basename(translated_file_path)
+            if src_lang is None:
+                raise Exception(
+                    _("%(lang)s is not supported", lang=source_lang)
+                )
+
+            tgt_lang = next(
+                (l for l in languages if l.code == target_lang), None
+            )
+            if tgt_lang is None:
+                raise Exception(
+                    _("%(lang)s is not supported", lang=target_lang)
+                )
+
+            translation = src_lang.get_translation(tgt_lang)
+            if translation is None:
+                raise Exception(
+                    _(
+                        "%(tname)s (%(tcode)s) is not available as a target language from %(sname)s (%(scode)s)",
+                        tname=_lazy(tgt_lang.name),
+                        tcode=tgt_lang.code,
+                        sname=_lazy(src_lang.name),
+                        scode=src_lang.code,
+                    )
+                )
+
+            translated_sample = translation.translate(src_sample)
 
             return jsonify(
                 {
-                    "translatedFileUrl": url_for('Main app.download_file', filename=translated_filename, _external=True)
+                    "sourceSample": src_sample,
+                    "translatedSample": translated_sample,
+                    "codec": used_codec,
+                    "detectedLanguage": model2iso(detected_src_lang["language"])
+                    if source_lang == "auto"
+                    else None,
+                    "isTextFile": is_text,
                 }
             )
+        except HTTPException:
+            raise
         except Exception as e:
-            abort(500, description=e)
+            abort(500, description=_("Cannot preview file: %(error)s", error=str(e)))
+        finally:
+            if os.path.isfile(filepath):
+                try:
+                    os.remove(filepath)
+                except OSError:
+                    pass
 
     @bp.get("/download_file/<string:filename>")
     def download_file(filename: str):
@@ -1052,6 +1334,79 @@ def create_app(args):
         download_filename = '.'.join(download_filename)
 
         return send_file(return_data, as_attachment=True, download_name=download_filename)
+
+    @bp.get("/translate_job/<string:job_id>")
+    @access_check
+    def translate_job(job_id: str):
+        """
+        Get the progress of a file translation
+        ---
+        tags:
+          - translate
+        parameters:
+          - in: path
+            name: job_id
+            type: string
+            required: true
+            description: Id of the file translation job returned by /translate_file
+        responses:
+          200:
+            description: File translation job progress
+            schema:
+              id: translate-job
+              type: object
+              properties:
+                jobId:
+                  type: string
+                  description: Id of the job
+                status:
+                  type: string
+                  description: Job status (running, done or error)
+                progress:
+                  type: number
+                  description: Progress percentage (0-100)
+                processedChars:
+                  type: number
+                  description: Number of characters already translated
+                totalChars:
+                  type: number
+                  description: Total number of characters to translate
+                speed:
+                  type: number
+                  description: Translation speed in characters per second
+                eta:
+                  type: number
+                  description: Estimated seconds remaining
+                translatedFileUrl:
+                  type: string
+                  description: Translated file url (only present when done)
+                error:
+                  type: string
+                  description: Error message (only present on error)
+          404:
+            description: Job not found
+            schema:
+              id: error-response
+              type: object
+              properties:
+                error:
+                  type: string
+                  description: Error message
+        """
+        job = job_store.snapshot(job_id)
+        if job is None:
+            abort(404, description=_("Job not found"))
+
+        if job["status"] == "done":
+            job_obj = job_store.get_object(job_id)
+            if job_obj is not None and job_obj.translated_file_path:
+                job["translatedFileUrl"] = url_for(
+                    'Main app.download_file',
+                    filename=os.path.basename(job_obj.translated_file_path),
+                    _external=True,
+                )
+
+        return jsonify(job)
 
     @bp.post("/detect")
     @access_check
@@ -1212,6 +1567,7 @@ def create_app(args):
                 "suggestions": args.suggestions,
                 "filesTranslation": not args.disable_files_translation,
                 "supportedFilesFormat": [] if args.disable_files_translation else frontend_argos_supported_files_format,
+                "supportedFileCodecs": text_file.get_supported_codecs(),
                 "language": {
                     "source": {
                         "code": frontend_argos_language_source.code,

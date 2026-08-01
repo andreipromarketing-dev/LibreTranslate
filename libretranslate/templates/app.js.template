@@ -39,8 +39,18 @@ document.addEventListener('DOMContentLoaded', function(){
             inputFile: false,
             loadingFileTranslation: false,
             translatedFileUrl: false,
+            fileJobId: false,
+            fileProgress: 0,
+            fileProgressText: "",
+            fileSpeedText: "",
+            fileEtaText: "",
+            filePollTimer: false,
             filesTranslation: true,
             frontendTimeout: 500,
+            fileCodec: "auto",
+            fileCodecs: ["auto"],
+            filePreview: false,
+            filePreviewLoading: false,
 
             apiSecret: "{{ bogus_api_secret }}"
         },
@@ -65,6 +75,9 @@ document.addEventListener('DOMContentLoaded', function(){
                     self.supportedFilesFormat = self.settings.supportedFilesFormat;
                     self.filesTranslation = self.settings.filesTranslation;
                     self.frontendTimeout = self.settings.frontendTimeout;
+                    if (self.settings.supportedFileCodecs && self.settings.supportedFileCodecs.length) {
+                        self.fileCodecs = self.settings.supportedFileCodecs;
+                    }
 
                     if (langsRequest.response) {
                         handleLangsResponse(self, langsRequest);
@@ -379,12 +392,76 @@ document.addEventListener('DOMContentLoaded', function(){
             },
             handleInputFile: function(e) {
                 this.inputFile = e.target.files[0];
+                this.filePreview = false;
+                this.fileCodec = "auto";
             },
             removeFile: function(e) {
               e.preventDefault()
+              if (this.filePollTimer){
+                clearInterval(this.filePollTimer);
+                this.filePollTimer = false;
+              }
               this.inputFile = false;
               this.translatedFileUrl = false;
               this.loadingFileTranslation = false;
+              this.filePreview = false;
+              this.filePreviewLoading = false;
+            },
+            previewFile: function(e) {
+                e.preventDefault();
+                if (this.disableInput) return;
+
+                let self = this;
+                let previewRequest = new XMLHttpRequest();
+
+                previewRequest.open("POST", BaseUrl + "/preview_file", true);
+
+                let data = new FormData();
+                data.append("file", this.inputFile);
+                data.append("source", this.sourceLang);
+                data.append("target", this.targetLang);
+                data.append("api_key", this.apiKey);
+                if (self.apiSecret) data.append("secret", self.apiSecret);
+                data.append("codec", this.fileCodec);
+
+                this.filePreviewLoading = true;
+
+                previewRequest.onload = function()  {
+                    self.filePreviewLoading = false;
+                    if (previewRequest.status === 200) {
+                        try{
+                            let res = JSON.parse(this.response);
+                            self.filePreview = res;
+                        }catch(e){
+                            self.error = e.message;
+                        }
+                    }else{
+                        let res = {};
+                        try { res = JSON.parse(this.response); } catch(e) {}
+                        self.error = res.error || {{ _e("Cannot load %(url)s", url=url_prefix + "/preview_file") }};
+                    }
+                }
+
+                previewRequest.onerror = function() {
+                    self.filePreviewLoading = false;
+                    self.error = {{ _e("Cannot load %(url)s", url=url_prefix + "/preview_file") }};
+                };
+
+                previewRequest.send(data);
+            },
+            changeFileCodec: function(e) {
+                e.preventDefault();
+                if (this.inputFile && !this.filePreviewLoading) {
+                    this.previewFile(e);
+                }
+            },
+            closeFilePreview: function(e) {
+                e.preventDefault();
+                this.filePreview = false;
+            },
+            continueFileTranslation: function(e) {
+                this.filePreview = false;
+                this.translateFile(e);
             },
             refreshOnce: function(){
                 var lastRefreshed = parseInt(localStorage.getItem("refreshed") || 0);
@@ -410,8 +487,13 @@ document.addEventListener('DOMContentLoaded', function(){
                 data.append("target", this.targetLang);
                 data.append("api_key", this.apiKey);
                 if (self.apiSecret) data.append("secret", self.apiSecret);
+                data.append("codec", this.fileCodec);
 
                 this.loadingFileTranslation = true
+                this.fileProgress = 0
+                this.fileProgressText = ""
+                this.fileSpeedText = ""
+                this.fileEtaText = ""
 
                 translateFileRequest.onload = function()  {
                     if (translateFileRequest.readyState === 4 && translateFileRequest.status === 200) {
@@ -421,17 +503,11 @@ document.addEventListener('DOMContentLoaded', function(){
                                 if (self.refreshOnce()) return;
                             }
                             {% endif %}
-                            self.loadingFileTranslation = false;
 
                             let res = JSON.parse(this.response);
-                            if (res.translatedFileUrl){
-                                self.translatedFileUrl = res.translatedFileUrl;
-
-                                let link = document.createElement("a");
-                                link.href = self.translatedFileUrl;
-                                link.download = "";
-                                link.click();
-                                handleNotification("Translation Complete", "Finished translating " + self.inputFile.name + ".");
+                            if (res.jobId){
+                                self.fileJobId = res.jobId;
+                                self.pollFileJob();
                             }else{
                                 throw new Error(res.error || {{ _e("Unknown error") }});
                             }
@@ -461,6 +537,73 @@ document.addEventListener('DOMContentLoaded', function(){
 
                 translateFileRequest.send(data);
                 Notification.requestPermission();
+            },
+            pollFileJob: function() {
+                let self = this;
+                let url = BaseUrl + "/translate_job/" + self.fileJobId;
+
+                const stopPolling = function() {
+                    if (self.filePollTimer){
+                        clearInterval(self.filePollTimer);
+                        self.filePollTimer = false;
+                    }
+                };
+
+                const poll = function() {
+                    let req = new XMLHttpRequest();
+                    req.open("GET", url, true);
+                    req.onload = function() {
+                        if (req.readyState === 4 && req.status === 200) {
+                            let job = JSON.parse(req.response);
+                            self.updateFileProgress(job);
+
+                            if (job.status === "running") {
+                                return;
+                            }
+
+                            stopPolling();
+                            self.loadingFileTranslation = false;
+
+                            if (job.status === "done" && job.translatedFileUrl) {
+                                self.translatedFileUrl = job.translatedFileUrl;
+
+                                let link = document.createElement("a");
+                                link.href = self.translatedFileUrl;
+                                link.download = "";
+                                link.click();
+                                handleNotification("Translation Complete", "Finished translating " + self.inputFile.name + ".");
+                            } else if (job.status === "error") {
+                                self.error = job.error || {{ _e("Unknown error") }};
+                                self.inputFile = false;
+                                handleNotification("Translation Failed", self.error);
+                            }
+                        } else {
+                            stopPolling();
+                            self.loadingFileTranslation = false;
+                            let res = {};
+                            try { res = JSON.parse(req.response); } catch(e) {}
+                            self.error = res.error || {{ _e("Cannot load %(url)s", url=url_prefix + "/translate_job") }};
+                            self.inputFile = false;
+                            handleNotification("Translation Failed", self.error);
+                        }
+                    };
+                    req.onerror = function() {
+                        stopPolling();
+                        self.loadingFileTranslation = false;
+                        self.inputFile = false;
+                        handleNotification("Translation Failed", {{ _e("Cannot load %(url)s", url=url_prefix + "/translate_job") }});
+                    };
+                    req.send();
+                };
+
+                self.filePollTimer = setInterval(poll, 1000);
+                poll();
+            },
+            updateFileProgress: function(job) {
+                this.fileProgress = Math.round(job.progress || 0);
+                this.fileProgressText = String(this.fileProgress) + "%";
+                this.fileSpeedText = job.speed ? formatFileSpeed(job.speed) : "";
+                this.fileEtaText = (job.eta != null) ? formatFileEta(job.eta) : "";
             }
         }
     });
@@ -521,6 +664,23 @@ function handleNotification(title, body) {
       body,
       tag: 'libretranslate'
   });
+}
+
+function formatFileSpeed(speed) {
+    if (speed >= 1000) {
+        return (speed / 1000).toFixed(1) + "K chars/s";
+    }
+    return Math.round(speed) + " chars/s";
+}
+
+function formatFileEta(seconds) {
+    seconds = Math.max(0, Math.round(seconds));
+    let h = Math.floor(seconds / 3600);
+    let m = Math.floor((seconds % 3600) / 60);
+    let s = seconds % 60;
+    if (h > 0) return h + "h " + m + "m " + s + "s";
+    if (m > 0) return m + "m " + s + "s";
+    return s + "s";
 }
 
 /**

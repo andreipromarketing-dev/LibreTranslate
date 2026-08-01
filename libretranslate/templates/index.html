@@ -282,10 +282,66 @@
 											</div>
 										</div>
 									</div>
-									<button @click="translateFile" v-if="translatedFileUrl === false && loadingFileTranslation === false" class="btn">{{ _h("Translate") }}</button>
+									<button @click="previewFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Preview") }}</button>
+									<button @click="translateFile" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false" class="btn">{{ _h("Translate") }}</button>
 									<a v-if="translatedFileUrl !== false" :href="translatedFileUrl" class="btn">{{ _h("Download") }}</a>
-									<div class="progress" v-if="loadingFileTranslation">
+									<div class="progress translate" v-if="loadingFileTranslation">
+										<div class="determinate" :style="{width: fileProgress + '%'}"></div>
+									</div>
+									<div v-if="loadingFileTranslation" class="center file-translation-label">
+										<span v-if="fileProgressText !== ''">[[ fileProgressText ]]</span>
+										<span v-if="fileSpeedText !== ''"> · [[ fileSpeedText ]]</span>
+										<span v-if="fileEtaText !== ''"> · {{ _h("Time left") }} ~[[ fileEtaText ]]</span>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div v-if="filePreview !== false" class="file-preview-overlay">
+							<div class="file-preview-modal card">
+								<div class="card-content">
+									<div class="row mb-0">
+										<div class="col s12 file-preview-head">
+											<span class="file-preview-title">{{ _h("Preview") }}: [[ inputFile.name ]]</span>
+											<button class="btn-flat" @click="closeFilePreview" aria-label="{{ _h('Close') }}">
+												<i class="material-icons">close</i>
+											</button>
+										</div>
+									</div>
+									<div v-if="filePreviewLoading" class="progress translate">
 										<div class="indeterminate"></div>
+									</div>
+									<div v-if="!filePreviewLoading && filePreview" class="row">
+										<div class="col s12 m6">
+											<div class="input-field">
+												<label>{{ _h("Source") }}</label>
+												<textarea readonly class="file-preview-textarea" :value="filePreview.sourceSample"></textarea>
+											</div>
+										</div>
+										<div class="col s12 m6">
+											<div class="input-field">
+												<label>{{ _h("Translation") }}</label>
+												<textarea readonly class="file-preview-textarea" :value="filePreview.translatedSample"></textarea>
+											</div>
+										</div>
+									</div>
+									<div v-if="!filePreviewLoading && filePreview" class="row">
+										<div class="col s12 file-preview-meta">
+											<span v-if="filePreview.detectedLanguage" class="file-preview-meta-item">{{ _h("Detected language:") }} <strong>[[ filePreview.detectedLanguage ]]</strong></span>
+											<span v-if="filePreview.isTextFile && filePreview.codec" class="file-preview-meta-item">{{ _h("Detected codec:") }} <strong>[[ filePreview.codec ]]</strong></span>
+											<span v-if="!filePreview.isTextFile" class="file-preview-meta-item">{{ _h("This file format is not text, the codec does not apply.") }}</span>
+										</div>
+									</div>
+									<div v-if="!filePreviewLoading" class="row mb-0">
+										<div class="col s12 file-preview-controls">
+											<div class="input-field file-preview-codec">
+												<select v-model="fileCodec" class="browser-default" :disabled="!filePreview" @change="changeFileCodec">
+													<option v-for="c in fileCodecs" :value="c" :key="c">[[ c ]]</option>
+												</select>
+												<label>{{ _h("Codec") }}</label>
+											</div>
+											<button class="btn" @click="changeFileCodec" :disabled="filePreviewLoading || !filePreview">{{ _h("Change codec") }}</button>
+											<button class="btn" @click="continueFileTranslation" :disabled="filePreviewLoading || !filePreview">{{ _h("Continue translation") }}</button>
+										</div>
 									</div>
 								</div>
 							</div>

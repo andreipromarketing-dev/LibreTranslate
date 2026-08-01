@@ -112,6 +112,16 @@ msgstr ""
 msgid "Invalid request: file format not supported"
 msgstr ""
 
+#: libretranslate/app.py:1001
+#: libretranslate/app.py:1216
+msgid "Invalid request: unknown codec"
+msgstr ""
+
+#: libretranslate/app.py:1298
+#, python-format
+msgid "Cannot preview file: %(error)s"
+msgstr ""
+
 #: libretranslate/app.py:1037
 msgid "Invalid filename"
 msgstr ""
@@ -761,5 +771,45 @@ msgstr ""
 #: libretranslate/templates/index.html:355
 #, python-format
 msgid "%(libretranslate)s Contributors"
+msgstr ""
+
+#: libretranslate/templates/index.html:293
+msgid "Time left"
+msgstr ""
+
+#: libretranslate/templates/index.html:285
+msgid "Preview"
+msgstr ""
+
+#: libretranslate/templates/index.html:305
+msgid "Close"
+msgstr ""
+
+#: libretranslate/templates/index.html:316
+msgid "Source"
+msgstr ""
+
+#: libretranslate/templates/index.html:329
+msgid "Detected language:"
+msgstr ""
+
+#: libretranslate/templates/index.html:330
+msgid "Detected codec:"
+msgstr ""
+
+#: libretranslate/templates/index.html:331
+msgid "This file format is not text, the codec does not apply."
+msgstr ""
+
+#: libretranslate/templates/index.html:340
+msgid "Codec"
+msgstr ""
+
+#: libretranslate/templates/index.html:342
+msgid "Change codec"
+msgstr ""
+
+#: libretranslate/templates/index.html:343
+msgid "Continue translation"
 msgstr ""
 

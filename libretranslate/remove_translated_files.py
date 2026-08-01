@@ -5,6 +5,8 @@ from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from libretranslate.progress import job_store
+
 
 def remove_translated_files(upload_dir: str):
     now = time.mktime(datetime.now().timetuple())
@@ -15,6 +17,9 @@ def remove_translated_files(upload_dir: str):
             f_time = os.path.getmtime(f)
             if (now - f_time) > 1800:  # 30 minutes
                 os.remove(f)
+
+    # Remove stale finished jobs
+    job_store.cleanup()
 
 
 def setup(upload_dir):

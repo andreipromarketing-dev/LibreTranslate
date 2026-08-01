@@ -118,6 +118,16 @@ msgstr "Недействительный запрос: пустой файл"
 msgid "Invalid request: file format not supported"
 msgstr "Недействительный запрос: формат файла не поддерживается"
 
+#: libretranslate/app.py:1001
+#: libretranslate/app.py:1216
+msgid "Invalid request: unknown codec"
+msgstr "Недействительный запрос: неизвестная кодировка"
+
+#: libretranslate/app.py:1298
+#, python-format
+msgid "Cannot preview file: %(error)s"
+msgstr "Не удалось открыть предпросмотр файла: %(error)s"
+
 #: libretranslate/app.py:1037
 msgid "Invalid filename"
 msgstr "Неверное имя файла"
@@ -740,6 +750,46 @@ msgstr "Удалить файл"
 #: libretranslate/templates/index.html:285
 msgid "Translate"
 msgstr "Перевести"
+
+#: libretranslate/templates/index.html:293
+msgid "Time left"
+msgstr "Осталось"
+
+#: libretranslate/templates/index.html:285
+msgid "Preview"
+msgstr "Предпросмотр"
+
+#: libretranslate/templates/index.html:305
+msgid "Close"
+msgstr "Закрыть"
+
+#: libretranslate/templates/index.html:316
+msgid "Source"
+msgstr "Исходный текст"
+
+#: libretranslate/templates/index.html:329
+msgid "Detected language:"
+msgstr "Определённый язык:"
+
+#: libretranslate/templates/index.html:330
+msgid "Detected codec:"
+msgstr "Определённая кодировка:"
+
+#: libretranslate/templates/index.html:331
+msgid "This file format is not text, the codec does not apply."
+msgstr "Этот формат файла не является текстовым, кодировка не применяется."
+
+#: libretranslate/templates/index.html:340
+msgid "Codec"
+msgstr "Кодировка"
+
+#: libretranslate/templates/index.html:342
+msgid "Change codec"
+msgstr "Сменить кодировку"
+
+#: libretranslate/templates/index.html:343
+msgid "Continue translation"
+msgstr "Продолжить перевод"
 
 #: libretranslate/templates/index.html:286
 #: libretranslate/templates/index.html:332
