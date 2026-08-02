@@ -1657,7 +1657,28 @@ def create_app(args):
         if not q:
             abort(400, description=_("Invalid request: missing %(name)s parameter", name='q'))
 
-        return jsonify(model2iso(detect_languages(q)))
+# Translations endpoint for frontend
+    @bp.get("/translations")
+    @limiter.exempt
+    def get_translations():
+        """
+        Get translations for the current locale
+        ---
+        tags:
+          - misc
+        responses:
+          200:
+            description: Translation strings
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+        """
+        from flask_babel import get_locale as flask_get_locale
+        from libretranslate.locales import get_translations_for_locale
+        locale = str(flask_get_locale())
+        translations = get_translations_for_locale(locale)
+        return jsonify(translations)
 
     @bp.route("/frontend/settings")
     @limiter.exempt

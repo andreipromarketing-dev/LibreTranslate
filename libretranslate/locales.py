@@ -95,3 +95,54 @@ def swag_eval(swag, func):
 
 def lazy_swag(swag):
     return swag_eval(swag, _lazy)
+
+
+@lru_cache(maxsize=None)
+def get_translations_for_locale(locale: str) -> dict:
+    """Load all translation strings for a given locale."""
+    import json
+    import os
+    
+    # Get the path to the locale's .po file
+    locales_dir = os.path.join(os.path.dirname(__file__), 'locales')
+    po_file = os.path.join(locales_dir, locale, 'LC_MESSAGES', 'messages.po')
+    
+    if not os.path.exists(po_file):
+        return {}
+    
+    translations = {}
+    
+    try:
+        with open(po_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Parse .po file
+        entries = content.split('\n\n')
+        current_msgid = None
+        current_msgstr = None
+        
+        for entry in entries:
+            lines = entry.strip().split('\n')
+            msgid = None
+            msgstr = None
+            for line in lines:
+                line = line.strip()
+                if line.startswith('msgid '):
+                    msgid = line[6:-1]  # Remove 'msgid "' and trailing '"'
+                elif line.startswith('msgstr '):
+                    msgstr = line[7:-1]  # Remove 'msgstr "' and trailing '"'
+            
+            if msgid and msgstr and msgid != msgstr:
+                # Unescape
+                import codecs
+                try:
+                    msgid = codecs.decode(msgid, 'unicode_escape')
+                    msgstr = codecs.decode(msgstr, 'unicode_escape')
+                except:
+                    pass
+                if msgid and msgstr:
+                    translations[msgid] = msgstr
+    except Exception as e:
+        print(f"Error loading translations for {locale}: {e}")
+    
+    return translations

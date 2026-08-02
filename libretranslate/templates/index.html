@@ -117,21 +117,21 @@
 				<!-- === ABBREVIATIONS PANEL === -->
 				<div v-if="showTab === 'abbreviations'" class="drawer-panel" id="abbreviations-panel">
 					<div class="panel-header">
-						<h3>{{ _h("Abbreviation Dictionary") }}</h3>
+						<h3>[[ t('Abbreviation Dictionary') ]]</h3>
 						<button type="button" class="btn btn-primary btn-sm" @click="openAbbrModal()">
-							<i class="material-icons">add</i> {{ _h("Add") }}
+							<i class="material-icons">add</i> [[ t('Add') ]]
 						</button>
 					</div>
 					
 					<div class="panel-toolbar">
 						<button class="btn btn-outline btn-sm" @click="exportAbbreviationsCSV">
-							<i class="material-icons">download</i> {{ _h("Export CSV") }}
+							<i class="material-icons">download</i> [[ t('Export CSV') ]]
 						</button>
 						<button class="btn btn-outline btn-sm" @click="exportAbbreviationsJSON">
-							<i class="material-icons">code</i> {{ _h("Export JSON") }}
+							<i class="material-icons">code</i> [[ t('Export JSON') ]]
 						</button>
 						<button class="btn btn-secondary btn-sm" @click="copyAbbrInstruction">
-							<i class="material-icons">description</i> {{ _h("Copy JSON Instruction") }}
+							<i class="material-icons">description</i> [[ t('Copy JSON Instruction') ]]
 						</button>
 						
 						<!-- JSON Import Zone -->
@@ -144,8 +144,8 @@
 								 @change="onJsonFileSelect($event, 'abbr')">
 							<div class="drop-area" v-if="!jsonImportMode.abbr">
 								<i class="material-icons">cloud_upload</i>
-								<p>{{ _h("Drag JSON file here or click to select") }}</p>
-								<small>{{ _h("Or paste JSON below") }}</small>
+								<p>[[ t('Drag JSON file here or click to select') ]]</p>
+								<small>[[ t('Or paste JSON below') ]]</small>
 							</div>
 							<div v-else class="paste-area">
 								<textarea v-model="jsonPasteText.abbr" 
@@ -154,10 +154,10 @@
 										  rows="6"></textarea>
 								<div class="import-actions">
 									<button class="btn btn-primary" @click="importFromPaste('abbr')">
-										{{ _h("Import from Paste") }}
+										[[ t('Import from Paste') ]]
 									</button>
 									<button class="btn btn-outline" @click="cancelJsonImport('abbr')">
-										{{ _h("Cancel") }}
+										[[ t('Cancel') ]]
 									</button>
 								</div>
 							</div>
@@ -166,13 +166,13 @@
 						<input type="file" ref="abbrCsvFile" accept=".csv" style="display:none" 
 							 @change="importAbbreviationsCSV">
 						<button class="btn btn-outline btn-sm" @click="importFileClick('abbrCsvFile')">
-							<i class="material-icons">upload</i> {{ _h("Import CSV") }}
+							<i class="material-icons">upload</i> [[ t('Import CSV') ]]
 						</button>
 						<button class="btn btn-secondary btn-sm" @click="copyAbbrInstruction">
-							<i class="material-icons">description</i> {{ _h("Copy JSON Instruction") }}
+							<i class="material-icons">description</i> [[ t('Copy JSON Instruction') ]]
 						</button>
 						<button class="btn btn-danger btn-sm" @click="confirmClearAbbr">
-							<i class="material-icons">delete_sweep</i> {{ _h("Clear All") }}
+							<i class="material-icons">delete_sweep</i> [[ t('Clear All') ]]
 						</button>
 					</div>
 					
@@ -180,10 +180,10 @@
 						<table class="dict-table">
 							<thead>
 								<tr>
-									<th>{{ _h("Abbreviation") }}</th>
-									<th>{{ _h("Expansion") }}</th>
-									<th>{{ _h("Case Sensitive") }}</th>
-									<th>{{ _h("Actions") }}</th>
+									<th>[[ t('Abbreviation') ]]</th>
+									<th>[[ t('Expansion') ]]</th>
+									<th>[[ t('Case Sensitive') ]]</th>
+									<th>[[ t('Actions') ]]</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -192,11 +192,11 @@
 									<td>[[ entry.expansion ]]</td>
 									<td class="text-center">
 										<span class="badge" :class="entry.case_sensitive ? 'badge-primary' : 'badge-secondary'">
-											[[ entry.case_sensitive ? _h('Yes') : _h('No') ]]
+											[[ entry.case_sensitive ? t('Yes') : t('No') ]]
 										</span>
 									</td>
 									<td class="actions">
-										<button type="button" class="icon-btn" @click="openAbbrModal(entry)" :title="_h('Edit')">
+										<button type="button" class="icon-btn" @click="openAbbrModal(entry)" :title="t('Edit')">
 											<i class="material-icons">edit</i>
 										</button>
 										<button type="button" class="icon-btn danger" @click="deleteAbbr(entry)" :title="_h('Delete')">
@@ -205,7 +205,7 @@
 									</td>
 								</tr>
 								<tr v-if="abbreviations.length === 0">
-									<td colspan="4" class="empty-state">{{ _h("No abbreviations yet. Click Add to create one.") }}</td>
+									<td colspan="4" class="empty-state">[[ t('No abbreviations yet. Click Add to create one.') ]]</td>
 								</tr>
 							</tbody>
 						</table>
@@ -215,21 +215,21 @@
 				<!-- === GLOSSARY PANEL === -->
 				<div v-if="showTab === 'glossary'" class="drawer-panel" id="glossary-panel">
 					<div class="panel-header">
-						<h3>{{ _h("Terminology (Glossary)") }}</h3>
+						<h3>[[ t('Terminology (Glossary)') ]]</h3>
 						<button type="button" class="btn btn-primary btn-sm" @click="openGlossaryModal()">
-							<i class="material-icons">add</i> {{ _h("Add") }}
+							<i class="material-icons">add</i> [[ t('Add') ]]
 						</button>
 					</div>
 					
 					<div class="panel-toolbar">
 						<button class="btn btn-outline btn-sm" @click="exportGlossaryCSV">
-							<i class="material-icons">download</i> {{ _h("Export CSV") }}
+							<i class="material-icons">download</i> [[ t('Export CSV') ]]
 						</button>
 						<button class="btn btn-outline btn-sm" @click="exportGlossaryJSON">
-							<i class="material-icons">code</i> {{ _h("Export JSON") }}
+							<i class="material-icons">code</i> [[ t('Export JSON') ]]
 						</button>
 						<button class="btn btn-secondary btn-sm" @click="copyGlossaryInstruction">
-							<i class="material-icons">description</i> {{ _h("Copy JSON Instruction") }}
+							<i class="material-icons">description</i> [[ t('Copy JSON Instruction') ]]
 						</button>
 						
 						<!-- JSON Import Zone -->
@@ -242,8 +242,8 @@
 								 @change="onJsonFileSelect($event, 'glossary')">
 							<div class="drop-area" v-if="!jsonImportMode.glossary">
 								<i class="material-icons">cloud_upload</i>
-								<p>{{ _h("Drag JSON file here or click to select") }}</p>
-								<small>{{ _h("Or paste JSON below") }}</small>
+								<p>[[ t('Drag JSON file here or click to select') ]]</p>
+								<small>[[ t('Or paste JSON below') ]]</small>
 							</div>
 							<div v-else class="paste-area">
 								<textarea v-model="jsonPasteText.glossary" 
@@ -252,10 +252,10 @@
 										  rows="6"></textarea>
 								<div class="import-actions">
 									<button class="btn btn-primary" @click="importFromPaste('glossary')">
-										{{ _h("Import from Paste") }}
+										[[ t('Import from Paste') ]]
 									</button>
 									<button class="btn btn-outline" @click="cancelJsonImport('glossary')">
-										{{ _h("Cancel") }}
+										[[ t('Cancel') ]]
 									</button>
 								</div>
 							</div>
@@ -264,13 +264,13 @@
 						<input type="file" ref="glossaryCsvFile" accept=".csv" style="display:none"
 							 @change="importGlossaryCSV">
 						<button class="btn btn-outline btn-sm" @click="importFileClick('glossaryCsvFile')">
-							<i class="material-icons">upload</i> {{ _h("Import CSV") }}
+							<i class="material-icons">upload</i> [[ t('Import CSV') ]]
 						</button>
 						<button class="btn btn-secondary btn-sm" @click="copyGlossaryInstruction">
-							<i class="material-icons">description</i> {{ _h("Copy JSON Instruction") }}
+							<i class="material-icons">description</i> [[ t('Copy JSON Instruction') ]]
 						</button>
 						<button class="btn btn-danger btn-sm" @click="confirmClearGlossary">
-							<i class="material-icons">delete_sweep</i> {{ _h("Clear All") }}
+							<i class="material-icons">delete_sweep</i> [[ t('Clear All') ]]
 						</button>
 					</div>
 					
@@ -278,12 +278,12 @@
 						<table class="dict-table">
 							<thead>
 								<tr>
-									<th>{{ _h("Source Term") }}</th>
-									<th>{{ _h("Target Term") }}</th>
-									<th>{{ _h("Languages") }}</th>
-									<th>{{ _h("Case Sens.") }}</th>
-									<th>{{ _h("Context") }}</th>
-									<th>{{ _h("Actions") }}</th>
+									<th>[[ t('Source Term') ]]</th>
+									<th>[[ t('Target Term') ]]</th>
+									<th>[[ t('Languages') ]]</th>
+									<th>[[ t('Case Sens.') ]]</th>
+									<th>[[ t('Context') ]]</th>
+									<th>[[ t('Actions') ]]</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -293,21 +293,21 @@
 									<td>[[ entry.source_lang ]] → [[ entry.target_lang ]]</td>
 									<td class="text-center">
 										<span class="badge" :class="entry.case_sensitive ? 'badge-primary' : 'badge-secondary'">
-											[[ entry.case_sensitive ? _h('Yes') : _h('No') ]]
+											[[ entry.case_sensitive ? t('Yes') : t('No') ]]
 										</span>
 									</td>
 									<td>[[ entry.context || '—' ]]</td>
 									<td class="actions">
-										<button type="button" class="icon-btn" @click="openGlossaryModal(entry)" :title="_h('Edit')">
+										<button type="button" class="icon-btn" @click="openGlossaryModal(entry)" :title="t('Edit')">
 											<i class="material-icons">edit</i>
 										</button>
-										<button type="button" class="icon-btn danger" @click="deleteGlossary(entry)" :title="_h('Delete')">
+										<button type="button" class="icon-btn danger" @click="deleteGlossary(entry)" :title="t('Delete')">
 											<i class="material-icons">delete</i>
 										</button>
 									</td>
 								</tr>
 								<tr v-if="glossary.length === 0">
-									<td colspan="6" class="empty-state">{{ _h("No terminology entries yet. Click Add to create one.") }}</td>
+									<td colspan="6" class="empty-state">[[ t('No terminology entries yet. Click Add to create one.') ]]</td>
 								</tr>
 							</tbody>
 						</table>
@@ -317,17 +317,17 @@
 				<!-- === SETTINGS PANEL === -->
 				<div v-if="showTab === 'settings'" class="drawer-panel">
 					<div class="panel-header">
-						<h3>{{ _h("Settings") }}</h3>
+						<h3>[[ t('Settings') ]]</h3>
 					</div>
 					<div class="panel-content">
 						<div class="form-group">
-							<label for="pdf-backend">{{ _h("PDF Backend") }}</label>
+							<label for="pdf-backend">[[ t('PDF Backend') ]]</label>
 							<select id="pdf-backend" v-model="pdfBackend" @change="savePdfBackend">
 								<option v-for="b in availablePdfBackends" :value="b.value" :key="b.value">
 									[[ b.label ]]
 								</option>
 							</select>
-							<small class="muted">{{ _h("Auto: smart routing based on PDF type") }}</small>
+							<small class="muted">[[ t('Auto: smart routing based on PDF type') ]]</small>
 						</div>
 					</div>
 				</div>
@@ -687,36 +687,36 @@
 		<div class="modal card glass" role="dialog" aria-modal="true" aria-labelledby="abbr-modal-title">
 			<div class="modal-head">
 				<span id="abbr-modal-title" class="modal-title">
-					[[ editingAbbr ? _h('Edit Abbreviation') : _h('Add Abbreviation') ]]
+					[[ abbrModalTitle ]]
 				</span>
-				<button type="button" class="icon-btn" @click="closeAbbrModal" :aria-label="_h('Close')">
+				<button type="button" class="icon-btn" @click="closeAbbrModal" :aria-label="t('Close')">
 					<i class="material-icons">close</i>
 				</button>
 			</div>
 			<div class="modal-body">
 				<form @submit.prevent="saveAbbr">
 					<div class="form-group">
-						<label for="abbr-abbreviation">{{ _h("Abbreviation") }}</label>
+						<label for="abbr-abbreviation">[[ t('Abbreviation') ]]</label>
 						<input id="abbr-abbreviation" type="text" v-model="abbrForm.abbreviation" 
 							   required :disabled="editingAbbr" placeholder="т.д.">
 					</div>
 					<div class="form-group">
-						<label for="abbr-expansion">{{ _h("Expansion") }}</label>
+						<label for="abbr-expansion">[[ t('Expansion') ]]</label>
 						<input id="abbr-expansion" type="text" v-model="abbrForm.expansion" 
 							   required placeholder="и так далее">
 					</div>
 					<div class="form-group checkbox-group">
 						<label class="checkbox-label">
 							<input type="checkbox" v-model="abbrForm.case_sensitive">
-							<span>{{ _h("Case sensitive") }}</span>
+							<span>[[ t('Case sensitive') ]]</span>
 						</label>
 					</div>
 					<div class="modal-actions">
 						<button type="button" class="btn btn-outline" @click="closeAbbrModal">
-							{{ _h("Cancel") }}
+							[[ t('Cancel') ]]
 						</button>
 						<button type="submit" class="btn btn-primary">
-							[[ editingAbbr ? _h("Save") : _h("Add") ]]
+							[[ abbrSubmitLabel ]]
 						</button>
 					</div>
 				</form>
@@ -729,9 +729,9 @@
 		<div class="modal card glass" role="dialog" aria-modal="true" aria-labelledby="glossary-modal-title">
 			<div class="modal-head">
 				<span id="glossary-modal-title" class="modal-title">
-					[[ editingGlossary ? _h('Edit Terminology') : _h('Add Terminology') ]]
+					[[ glossaryModalTitle ]]
 				</span>
-				<button type="button" class="icon-btn" @click="closeGlossaryModal" :aria-label="_h('Close')">
+				<button type="button" class="icon-btn" @click="closeGlossaryModal" :aria-label="t('Close')">
 					<i class="material-icons">close</i>
 				</button>
 			</div>
@@ -739,19 +739,19 @@
 				<form @submit.prevent="saveGlossary">
 					<div class="form-row">
 						<div class="form-group">
-							<label for="glossary-source">{{ _h("Source Term") }}</label>
+							<label for="glossary-source">[[ t('Source Term') ]]</label>
 							<input id="glossary-source" type="text" v-model="glossaryForm.source_term" 
 								   required placeholder="machine learning">
 						</div>
 						<div class="form-group">
-							<label for="glossary-target">{{ _h("Target Term") }}</label>
+							<label for="glossary-target">[[ t('Target Term') ]]</label>
 							<input id="glossary-target" type="text" v-model="glossaryForm.target_term" 
 								   required placeholder="машинное обучение">
 						</div>
 					</div>
 					<div class="form-row">
 						<div class="form-group">
-							<label for="glossary-src-lang">{{ _h("Source Language") }}</label>
+							<label for="glossary-src-lang">[[ t('Source Language') ]]</label>
 							<select id="glossary-src-lang" v-model="glossaryForm.source_lang" required>
 								<option v-for="l in availableLangs" :value="l.code" :key="l.code">
 									[[ l.name ]] ([[ l.code ]])
@@ -759,7 +759,7 @@
 							</select>
 						</div>
 						<div class="form-group">
-							<label for="glossary-tgt-lang">{{ _h("Target Language") }}</label>
+							<label for="glossary-tgt-lang">[[ t('Target Language') ]]</label>
 							<select id="glossary-tgt-lang" v-model="glossaryForm.target_lang" required>
 								<option v-for="l in availableLangs" :value="l.code" :key="l.code">
 									[[ l.name ]] ([[ l.code ]])
@@ -769,7 +769,7 @@
 					</div>
 					<div class="form-row">
 						<div class="form-group">
-							<label for="glossary-context">{{ _h("Context") }}</label>
+							<label for="glossary-context">[[ t('Context') ]]</label>
 							<input id="glossary-context" type="text" v-model="glossaryForm.context" 
 								   placeholder="technical documentation">
 						</div>
@@ -777,15 +777,15 @@
 					<div class="form-group checkbox-group">
 						<label class="checkbox-label">
 							<input type="checkbox" v-model="glossaryForm.case_sensitive">
-							<span>{{ _h("Case sensitive") }}</span>
+							<span>[[ t('Case sensitive') ]]</span>
 						</label>
 					</div>
 					<div class="modal-actions">
 						<button type="button" class="btn btn-outline" @click="closeGlossaryModal">
-							{{ _h("Cancel") }}
+							[[ t('Cancel') ]]
 						</button>
 						<button type="submit" class="btn btn-primary">
-							[[ editingGlossary ? _h("Save") : _h("Add") ]]
+							[[ glossarySubmitLabel ]]
 						</button>
 					</div>
 				</form>
