@@ -262,6 +262,19 @@ jsonPasteText: { abbr: '', glossary: '' },
             },
             disableInput: function(){
                 return {% if under_attack %}true{% else %}false{% endif %} && this.apiKey === "";
+            },
+            // Modal title computed properties
+            glossaryModalTitle: function() {
+                return this.editingGlossary ? this.t('Edit Terminology') : this.t('Add Terminology');
+            },
+            glossarySubmitLabel: function() {
+                return this.editingGlossary ? this.t('Save') : this.t('Add');
+            },
+            abbrModalTitle: function() {
+                return this.editingAbbr ? this.t('Edit Abbreviation') : this.t('Add Abbreviation');
+            },
+            abbrSubmitLabel: function() {
+                return this.editingAbbr ? this.t('Save') : this.t('Add');
             }
         },
         filters: {
