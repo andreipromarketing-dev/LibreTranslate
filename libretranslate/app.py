@@ -45,6 +45,10 @@ from libretranslate.glossary import (
     get_glossary_store, get_glossary_processor,
     export_glossary_csv, import_glossary_csv
 )
+from libretranslate.pdf_inspector_backend import (
+    is_available as pdf_inspector_available,
+    classify_pdf, extract_markdown
+)
 
 from .api_keys import Database, RemoteDatabase
 from .suggestions import Database as SuggestionsDatabase
@@ -1724,6 +1728,7 @@ def create_app(args):
                 "filesTranslation": not args.disable_files_translation,
                 "supportedFilesFormat": [] if args.disable_files_translation else frontend_argos_supported_files_format,
                 "supportedFileCodecs": text_file.get_supported_codecs(),
+                "pdfBackend": args.pdf_backend,
                 "language": {
                     "source": {
                         "code": frontend_argos_language_source.code,
@@ -1736,6 +1741,47 @@ def create_app(args):
                 },
             }
         )
+
+    @bp.post("/frontend/settings")
+    @limiter.exempt
+    def frontend_settings_post():
+        """
+        Update Frontend Settings
+        ---
+        tags:
+          - misc
+        consumes:
+          - application/json
+        parameters:
+          - in: body
+            name: body
+            required: true
+            schema:
+              type: object
+              properties:
+                pdfBackend:
+                  type: string
+                  enum: [pymupdf, pdf-inspector, auto]
+                  description: PDF processing backend
+        responses:
+          200:
+            description: Settings updated
+          400:
+            description: Invalid request
+        """
+        data = request.get_json()
+        if not data:
+            abort(400, description=_("Invalid JSON"))
+        
+        pdf_backend = data.get('pdfBackend')
+        if pdf_backend not in ['pymupdf', 'pdf-inspector', 'auto']:
+            abort(400, description=_("Invalid pdfBackend value"))
+        
+        # Note: This only updates the runtime setting. For persistence across restarts,
+        # the --pdf-backend CLI argument or environment variable LT_PDF_BACKEND should be used.
+        args.pdf_backend = pdf_backend
+        
+        return jsonify({"success": True, "pdfBackend": pdf_backend})
 
     @bp.post("/suggest")
     def suggest():
@@ -2045,6 +2091,125 @@ def create_app(args):
             added += 1
         get_glossary_processor().reload()
         return jsonify({"added": added, "skipped": skipped, "total": added + skipped})
+
+    # === PARSE PDF ENDPOINT ===
+
+    @bp.post("/parse_pdf")
+    @access_check
+    def parse_pdf():
+        """
+        Parse PDF to Markdown without translation
+        ---
+        tags:
+          - translate
+        consumes:
+          - multipart/form-data
+        parameters:
+          - in: formData
+            name: file
+            type: file
+            required: true
+            description: PDF file to parse
+          - in: formData
+            name: pages
+            type: string
+            required: false
+            description: Comma-separated list of page numbers (1-indexed)
+        responses:
+          200:
+            description: Parsed PDF content
+            schema:
+              type: object
+              properties:
+                markdown:
+                  type: string
+                  description: Extracted Markdown content
+                pdf_type:
+                  type: string
+                  description: PDF type (text_based, scanned, image_based, mixed)
+                confidence:
+                  type: number
+                  format: float
+                  description: Classification confidence (0.0-1.0)
+                page_count:
+                  type: integer
+                  description: Number of pages in PDF
+                pages_needing_ocr:
+                  type: array
+                  items:
+                    type: integer
+                  description: 1-indexed page numbers needing OCR
+          400:
+            description: Invalid request
+          500:
+            description: Parse error
+        """
+        if args.disable_files_translation:
+            abort(400, description=_("Files translation are disabled on this server."))
+
+        if 'file' not in request.files:
+            abort(400, description=_("Invalid request: missing %(name)s parameter", name='file'))
+
+        file = request.files['file']
+        if file.filename == '':
+            abort(400, description=_("Invalid request: empty file"))
+
+        if os.path.splitext(file.filename)[1].lower() != '.pdf':
+            abort(400, description=_("Invalid request: file must be a PDF"))
+
+        pages = None
+        if 'pages' in request.form:
+            try:
+                pages = [int(p.strip()) for p in request.form.get('pages', '').split(',') if p.strip()]
+            except ValueError:
+                abort(400, description=_("Invalid pages parameter"))
+
+        filename = str(uuid.uuid4()) + '.' + secure_filename(file.filename)
+        filepath = os.path.join(get_upload_dir(), filename)
+        file.save(filepath)
+
+        try:
+            # Check if pdf-inspector is available
+            if not pdf_inspector_available():
+                abort(501, description=_("pdf-inspector backend not available. Install with: pip install libretranslate[pdf-inspector]"))
+
+            classification = classify_pdf(filepath)
+            if not classification:
+                abort(500, description=_("Failed to classify PDF"))
+
+            if classification["pdf_type"] not in ("text_based", "mixed") or classification["confidence"] < 0.4:
+                return jsonify({
+                    "markdown": None,
+                    "pdf_type": classification["pdf_type"],
+                    "confidence": classification["confidence"],
+                    "page_count": classification["page_count"],
+                    "pages_needing_ocr": [p + 1 for p in classification["pages_needing_ocr"]]
+                })
+
+            pages_arg = [p - 1 for p in pages] if pages else None
+            markdown = extract_markdown(filepath, pages=pages_arg)
+
+            if markdown is None:
+                abort(500, description=_("Failed to extract markdown from PDF"))
+
+            return jsonify({
+                "markdown": markdown,
+                "pdf_type": classification["pdf_type"],
+                "confidence": classification["confidence"],
+                "page_count": classification["page_count"],
+                "pages_needing_ocr": [p + 1 for p in classification["pages_needing_ocr"]]
+            })
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(f"PDF parse error: {e}")
+            abort(500, description=_("Cannot parse PDF: %(error)s", error=str(e)))
+        finally:
+            if os.path.isfile(filepath):
+                try:
+                    os.remove(filepath)
+                except OSError:
+                    pass
 
     app = Flask(__name__)
     app.config["JSON_AS_ASCII"] = False

@@ -11,9 +11,21 @@ from libretranslate.progress import job_store
 def remove_translated_files(upload_dir: str):
     now = time.mktime(datetime.now().timetuple())
 
+    # Files referenced by active jobs (running/paused) must not be deleted:
+    # the worker thread is still reading or writing them.
+    protected = set()
+    for job in job_store.all():
+        if job.status in ("running", "paused"):
+            if job.source_path:
+                protected.add(os.path.normcase(os.path.abspath(job.source_path)))
+            if job.translated_file_path:
+                protected.add(os.path.normcase(os.path.abspath(job.translated_file_path)))
+
     for f in os.listdir(upload_dir):
         f = os.path.join(upload_dir, f)
         if os.path.isfile(f):
+            if os.path.normcase(os.path.abspath(f)) in protected:
+                continue
             f_time = os.path.getmtime(f)
             if (now - f_time) > 1800:  # 30 minutes
                 os.remove(f)

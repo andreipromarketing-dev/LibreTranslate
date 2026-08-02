@@ -73,6 +73,9 @@ test = [
     "types-requests",
     "pip-audit"
 ]
+pdf-inspector = [
+    "pdf-inspector>=0.2.6"
+]
 
 
 [project.urls]

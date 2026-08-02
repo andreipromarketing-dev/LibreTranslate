@@ -62,6 +62,20 @@ document.addEventListener('DOMContentLoaded', function(){
             glossary: [],
             availableLangs: [],
             
+            // PDF Backend
+            pdfBackend: "{{ args.pdf_backend | default('pymupdf') }}",
+            availablePdfBackends: [
+                { value: 'pymupdf', label: 'PyMuPDF (default)' },
+                { value: 'auto', label: 'Auto (smart routing)' },
+                { value: 'pdf-inspector', label: 'pdf-inspector (enhanced)' }
+            ],
+            
+            // Abbreviation & Glossary
+            showTab: 'translate',  // 'translate' | 'abbreviations' | 'glossary' | 'settings'
+            abbreviations: [],
+            glossary: [],
+            availableLangs: [],
+            
             // Abbreviation modal
             abbrModalOpen: false,
             editingAbbr: null,
@@ -1158,17 +1172,32 @@ confirmClearGlossary: function() {
 },
 
 exportGlossaryCSV: function() { window.location.href = BaseUrl + "/glossary/export"; },
-exportGlossaryJSON: function() { window.location.href = BaseUrl + "/glossary/export/json"; },
+        exportGlossaryJSON: function() { window.location.href = BaseUrl + "/glossary/export/json"; },
 
-copyGlossaryInstruction: function() {
-    let instruction = `...`; // промпт для глоссария
-    navigator.clipboard.writeText(instruction).then(() => {
-        handleNotification("Copied", "{{ _h('JSON instruction copied to clipboard') }}");
-    });
-},
+        copyGlossaryInstruction: function() {
+            let instruction = `...`; // промпт для глоссария
+            navigator.clipboard.writeText(instruction).then(() => {
+                handleNotification("Copied", "{{ _h('JSON instruction copied to clipboard') }}");
+            });
+        },
 
-// === GLOSSARY JSON IMPORT ===
-importGlossaryJsonFile: function(e) {
+        savePdfBackend: function() {
+            let self = this;
+            fetch(BaseUrl + "/frontend/settings", {
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pdf_backend: self.pdfBackend })
+            }).then(r => {
+                if (r.ok) {
+                    handleNotification("Success", "{{ _h('PDF backend saved') }}");
+                } else {
+                    handleNotification("Error", "{{ _h('Failed to save PDF backend') }}");
+                }
+            });
+        },
+
+        // === GLOSSARY JSON IMPORT ===
+        importGlossaryJsonFile: function(e) {
     let file = e.target.files[0];
     if (file) this.processJsonFile(file, 'glossary');
 },

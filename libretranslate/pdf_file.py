@@ -19,6 +19,8 @@ characters, so regular PDFs are untouched.
 """
 
 import os
+import logging
+from typing import Optional, List
 
 import pymupdf as fitz
 
@@ -384,6 +386,19 @@ def translate_pdf(underlying_translation: ITranslation, filepath: str) -> str:
 
     # Return the web-accessible path (in upload_dir) for frontend download
     return getattr(translator, 'web_output_path', outfile_path)
+
+
+def parse_pdf_to_markdown(filepath: str, pages: Optional[List[int]] = None) -> Optional[str]:
+    """Parse PDF to Markdown without translation. Returns None if failed or pdf-inspector not available."""
+    try:
+        from libretranslate.pdf_inspector_backend import extract_markdown, pdf_inspector_available
+        if not pdf_inspector_available():
+            return None
+        pdf_pages = [p - 1 for p in pages] if pages else None
+        return extract_markdown(filepath, pages=pdf_pages)
+    except Exception as e:
+        logging.warning(f"pdf-inspector parse failed: {e}")
+        return None
 
 
 def get_web_filename(filepath: str) -> str:

@@ -314,13 +314,21 @@
 					</div>
 				</div>
 				
-				<!-- === SETTINGS PANEL (placeholder) === -->
+				<!-- === SETTINGS PANEL === -->
 				<div v-if="showTab === 'settings'" class="drawer-panel">
 					<div class="panel-header">
 						<h3>{{ _h("Settings") }}</h3>
 					</div>
 					<div class="panel-content">
-						<p class="muted">{{ _h("Settings panel coming soon") }}</p>
+						<div class="form-group">
+							<label for="pdf-backend">{{ _h("PDF Backend") }}</label>
+							<select id="pdf-backend" v-model="pdfBackend" @change="savePdfBackend">
+								<option v-for="b in availablePdfBackends" :value="b.value" :key="b.value">
+									[[ b.label ]]
+								</option>
+							</select>
+							<small class="muted">{{ _h("Auto: smart routing based on PDF type") }}</small>
+						</div>
 					</div>
 				</div>
 			</div>

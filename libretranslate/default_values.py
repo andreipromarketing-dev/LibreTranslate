@@ -246,6 +246,11 @@ _default_options_objects = [
         'default_value': '',
         'value_type': 'str'
     },
+    {
+        'name': 'PDF_BACKEND',
+        'default_value': 'pymupdf',
+        'value_type': 'str'
+    },
 ]
 
 

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "updated_at": "2026-08-01T22:40:41.237867Z",
+  "entries": [
+    {
+      "id": 1,
+      "source_term": "machine learning",
+      "target_term": "машинное обучение",
+      "source_lang": "en",
+      "target_lang": "ru",
+      "case_sensitive": false,
+      "context": "technical",
+      "created_at": "2026-08-01T22:32:27.219046Z"
+    },
+    {
+      "id": 2,
+      "source_term": "machine learning",
+      "target_term": "машинное обучение",
+      "source_lang": "en",
+      "target_lang": "ru",
+      "case_sensitive": false,
+      "context": "technical",
+      "created_at": "2026-08-01T22:37:04.159588Z"
+    },
+    {
+      "id": 3,
+      "source_term": "machine learning",
+      "target_term": "машинное обучение",
+      "source_lang": "en",
+      "target_lang": "ru",
+      "case_sensitive": false,
+      "context": "technical",
+      "created_at": "2026-08-01T22:40:41.237867Z"
+    }
+  ]
+}

@@ -225,6 +225,12 @@ def get_parser():
         "--disable-web-ui", default=DEFARGS['DISABLE_WEB_UI'], action="store_true", help="Disable web ui"
     )
     parser.add_argument(
+        "--pdf-backend",
+        choices=["pymupdf", "pdf-inspector", "auto"],
+        default=DEFARGS['PDF_BACKEND'],
+        help="PDF processing backend: pymupdf (default), pdf-inspector (enhanced), auto (smart routing)"
+    )
+    parser.add_argument(
         "--update-models", default=DEFARGS['UPDATE_MODELS'], action="store_true", help="Update language models at startup"
     )
     parser.add_argument(
@@ -266,6 +272,69 @@ def get_args():
 
 
 def main():
+    # Handle parse subcommand first (before argument parsing)
+    if len(sys.argv) > 1 and sys.argv[1] == 'parse':
+        if len(sys.argv) < 3:
+            print("Usage: libretranslate parse <input.pdf> [-o output.md] [--pages 1,3,5]")
+            sys.exit(1)
+        
+        input_file = sys.argv[2]
+        output_file = None
+        pages = None
+        
+        i = 3
+        while i < len(sys.argv):
+            if sys.argv[i] == '-o' and i + 1 < len(sys.argv):
+                output_file = sys.argv[i + 1]
+                i += 2
+            elif sys.argv[i] == '--pages' and i + 1 < len(sys.argv):
+                try:
+                    pages = [int(p.strip()) for p in sys.argv[i + 1].split(',')]
+                except ValueError:
+                    print("Error: --pages must be comma-separated integers")
+                    sys.exit(1)
+                i += 2
+            else:
+                i += 1
+        
+        if not output_file:
+            output_file = os.path.splitext(input_file)[0] + '.md'
+        
+        # Import and run parsing
+        try:
+            from libretranslate.pdf_inspector_backend import (
+                is_available as pdf_inspector_available, classify_pdf, extract_markdown
+            )
+            
+            if not pdf_inspector_available():
+                print("Error: pdf-inspector not available. Install with: pip install libretranslate[pdf-inspector]")
+                sys.exit(1)
+            
+            classification = classify_pdf(input_file)
+            if not classification:
+                print("Error: Failed to classify PDF")
+                sys.exit(1)
+            
+            print(f"PDF type: {classification['pdf_type']}, confidence: {classification['confidence']:.2f}")
+            
+            if classification["pdf_type"] not in ("text_based", "mixed") or classification["confidence"] < 0.7:
+                print(f"Warning: PDF is {classification['pdf_type']} with low confidence. OCR may be needed.")
+            
+            markdown = extract_markdown(input_file, pages=pages)
+            if markdown is None:
+                print("Error: Failed to extract markdown from PDF")
+                sys.exit(1)
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(markdown)
+            
+            print(f"Successfully parsed {input_file} -> {output_file}")
+            sys.exit(0)
+            
+        except Exception as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+
     args = get_args()
 
     if args.url_prefix:
