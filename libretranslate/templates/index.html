@@ -601,7 +601,7 @@
 						</div>
 					</div>
 
-					<div v-if="filePreview !== false" class="modal-overlay" @click.self="closeFilePreview">
+					<div v-if="filePreview !== false" v-cloak class="modal-overlay" @click.self="closeFilePreview">
 						<div class="modal card glass" role="dialog" aria-modal="true" aria-label="{{ _h('Preview') }}">
 							<div class="modal-head">
 								<span class="modal-title">{{ _h("Preview") }}: [[ inputFile.name ]]</span>
@@ -683,7 +683,7 @@
 	</main>
 
 	<!-- === MODAL ABBREVIATION === -->
-	<div v-if="abbrModalOpen" class="modal-overlay" @click.self="closeAbbrModal">
+	<div v-if="abbrModalOpen" v-cloak class="modal-overlay" @click.self="closeAbbrModal">
 		<div class="modal card glass" role="dialog" aria-modal="true" aria-labelledby="abbr-modal-title">
 			<div class="modal-head">
 				<span id="abbr-modal-title" class="modal-title">
@@ -725,7 +725,7 @@
 	</div>
 
 	<!-- === MODAL GLOSSARY === -->
-	<div v-if="glossaryModalOpen" class="modal-overlay" @click.self="closeGlossaryModal">
+	<div v-if="glossaryModalOpen" v-cloak class="modal-overlay" @click.self="closeGlossaryModal">
 		<div class="modal card glass" role="dialog" aria-modal="true" aria-labelledby="glossary-modal-title">
 			<div class="modal-head">
 				<span id="glossary-modal-title" class="modal-title">

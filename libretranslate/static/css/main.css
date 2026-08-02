@@ -1,3 +1,7 @@
+[v-cloak] {
+  display: none !important;
+}
+
 /* Custom styles for LibreTranslate page */
 
 /* ============ Design tokens ============ */
@@ -1375,7 +1379,8 @@ pre[class*="language-"] {
 .import-actions { display: flex; gap: 12px; justify-content: flex-end; }
 
 /* MODAL */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
 .modal { width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; animation: modalIn 0.2s ease-out; }
 @keyframes modalIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }

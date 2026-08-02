@@ -1674,9 +1674,10 @@ def create_app(args):
               additionalProperties:
                 type: string
         """
-        from flask_babel import get_locale as flask_get_locale
         from libretranslate.locales import get_translations_for_locale
-        locale = str(flask_get_locale())
+        locale = str(get_locale())
+        if not locale or locale not in get_available_locale_codes():
+            locale = 'en'
         translations = get_translations_for_locale(locale)
         return jsonify(translations)
 
