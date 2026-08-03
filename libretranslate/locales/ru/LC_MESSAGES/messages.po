@@ -902,6 +902,30 @@ msgstr "Открыть последний перевод"
 msgid "Save translation as..."
 msgstr "Сохранить перевод как..."
 
+#: libretranslate/templates/index.html:XXX
+msgid "Save Markdown"
+msgstr "Сохранить Markdown"
+
+#: libretranslate/templates/index.html:XXX
+msgid "Translate Markdown"
+msgstr "Перевести Markdown"
+
+#: libretranslate/templates/app.js.template:XXX
+msgid "Markdown saved"
+msgstr "Markdown сохранен"
+
+#: libretranslate/templates/app.js.template:XXX
+msgid "PDF requires OCR:"
+msgstr "PDF требует OCR:"
+
+#: libretranslate/templates/app.js.template:XXX
+msgid "Translated Markdown saved"
+msgstr "Переведенный Markdown сохранен"
+
+#: libretranslate/templates/app.js.template:XXX
+msgid "No markdown in response"
+msgstr "Нет markdown в ответе"
+
 #: libretranslate/templates/app.js.template:775
 msgid "and saved to"
 msgstr "и сохранен в"
@@ -1156,3 +1180,32 @@ msgstr "участникам, внёсшим вклад в разработку 
 
 #~ msgid "feedback"
 #~ msgstr "обратная связь"
+
+#: libretranslate/templates/index.html
+msgid "Building PDF"
+msgstr "?????? PDF?"
+
+#: libretranslate/templates/index.html
+msgid "Translation quality"
+msgstr "???????? ????????"
+
+#: libretranslate/templates/index.html
+msgid "Faster"
+msgstr "???????"
+
+#: libretranslate/templates/index.html
+msgid "Better quality"
+msgstr "????? ????????"
+
+#: libretranslate/templates/index.html
+msgid "Higher value = better quality, slower"
+msgstr "???? ???????? ? ?????? ???????, ?? ?????????"
+
+#: libretranslate/templates/index.html
+msgid "Translation quality saved"
+msgstr "???????? ???????? ?????????"
+
+#: libretranslate/templates/index.html
+msgid "Failed to save translation quality"
+msgstr "?? ??????? ????????? ???????? ????????"
+

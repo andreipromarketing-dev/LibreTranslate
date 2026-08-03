@@ -20,6 +20,7 @@ characters, so regular PDFs are untouched.
 
 import os
 import logging
+import traceback
 from typing import Optional, List
 
 import pymupdf as fitz
@@ -152,14 +153,31 @@ class RepairedPdfTranslator(PdfTranslator):
                 if count >= _PREVIEW_CHARS:
                     break
         self._repair = needs_repair(" ".join(sample)[:_PREVIEW_CHARS])
+        logging.info(
+            f"[PDF] translate_pdf start: {os.path.basename(self.pdf_path)} "
+            f"pages={self.doc.page_count} repair={self._repair}"
+        )
 
-        self._extract_text_from_pages()
-        self._check_cancelled()
-        self._translate_pages_data()
-        self._check_cancelled()
-        self._apply_translations_to_pdf()
-        self._check_cancelled()
-        self._save_translated_pdf()
+        try:
+            self._extract_text_from_pages()
+            logging.info(f"[PDF] extract done: {sum(len(b) for b in self.pages_data)} spans")
+            self._check_cancelled()
+            self._translate_pages_data()
+            logging.info("[PDF] translate phase done")
+            self._check_cancelled()
+            self._set_phase("assembly")
+            self._apply_translations_to_pdf()
+            self._check_cancelled()
+            self._save_translated_pdf()
+            logging.info(f"[PDF] save done: {self.output_path}")
+        except Exception:
+            logging.error("[PDF] translate_pdf failed:\n%s", traceback.format_exc())
+            raise
+
+    def _set_phase(self, phase: str):
+        job = self._job()
+        if job is not None:
+            job.phase = phase
 
     def _extract_text_with_pymupdf(self, page_num: int):
         self._check_paused()
@@ -259,6 +277,7 @@ class RepairedPdfTranslator(PdfTranslator):
         #    sitting on a stuck "100%".
         total_pages = len(self.pages_data)
         done_pages = 0
+        logging.info(f"[PDF] assembly start: pages={total_pages}")
 
         for page_index, blocks in enumerate(self.pages_data):
             self._check_paused()
@@ -329,6 +348,8 @@ class RepairedPdfTranslator(PdfTranslator):
 
             self._report_assembly_progress(done_pages, total_pages)
 
+        logging.info(f"[PDF] assembly complete: {total_pages} pages")
+
     def _save_translated_pdf(self):
         self._check_paused()
         self._check_cancelled()
@@ -338,6 +359,10 @@ class RepairedPdfTranslator(PdfTranslator):
         
         # 1. Save to original output_path (argostranslatefiles location)
         new_doc.save(self.output_path, garbage=4, deflate=True)
+        saved_size = os.path.getsize(self.output_path)
+        logging.info(f"[PDF] saved {self.output_path} size={saved_size}")
+        if saved_size == 0:
+            raise Exception("PDF translation produced an empty file")
         
         # 2. Copy to upload_dir for web accessibility
         try:
@@ -359,13 +384,13 @@ class RepairedPdfTranslator(PdfTranslator):
             
             web_path = os.path.join(upload_dir, web_name)
             shutil.copy2(self.output_path, web_path)
+            logging.info(f"[PDF] copied to upload_dir: {web_path} size={os.path.getsize(web_path)}")
             
             # Store web path for frontend
             self.web_output_path = web_path
             self.web_filename = web_name
-            print(f"[PDF] Saved to upload_dir: {web_path}")
         except Exception as e:
-            print(f"[PDF] Warning: Could not copy to upload_dir: {e}")
+            logging.warning(f"[PDF] Warning: Could not copy to upload_dir: {e}")
             self.web_output_path = self.output_path
             self.web_filename = os.path.basename(self.output_path)
         
@@ -402,12 +427,13 @@ def parse_pdf_to_markdown(filepath: str, pages: Optional[List[int]] = None) -> O
 
 
 def get_web_filename(filepath: str) -> str:
-    """Generate user-friendly filename for web download: original_translated.pdf"""
+    """Generate user-friendly filename for web download: original_translated.<ext>"""
     original_name = os.path.basename(filepath)
     if '_' in original_name:
         parts = original_name.split('_', 1)
         if len(parts) == 2:
-            return f"{parts[1].rsplit('.', 1)[0]}_translated.pdf"
+            base, ext = os.path.splitext(parts[1])
+            return f"{base}_translated{ext}"
     return f"translated_{original_name}"
 
 

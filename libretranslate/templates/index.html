@@ -329,6 +329,15 @@
 							</select>
 							<small class="muted">[[ t('Auto: smart routing based on PDF type') ]]</small>
 						</div>
+						<div class="form-group">
+							<label for="beam-size">[[ t('Translation quality') ]]</label>
+							<select id="beam-size" v-model="beamSize" @change="saveBeamSize">
+								<option value="4">4 — [[ t('Faster') ]]</option>
+								<option value="6">6</option>
+								<option value="8">8 — [[ t('Better quality') ]]</option>
+							</select>
+							<small class="muted">[[ t('Higher value = better quality, slower') ]]</small>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -548,6 +557,14 @@
 							<div class="file-actions" v-if="translatedFileUrl === false && loadingFileTranslation === false && filePreview === false">
 								<button type="button" class="btn btn-outline" @click="previewFile">{{ _h("Preview") }}</button>
 								<button type="button" class="btn btn-primary" @click="translateFile">{{ _h("Translate") }}</button>
+								<template v-if="isPdfFile">
+									<button type="button" class="btn btn-outline" @click="parsePdfToMarkdown" :disabled="parsingPdf">
+										<i class="material-icons" aria-hidden="true">description</i> {{ _h("Save Markdown") }}
+									</button>
+									<button type="button" class="btn btn-outline" @click="translateMarkdown">
+										<i class="material-icons" aria-hidden="true">translate</i> {{ _h("Translate Markdown") }}
+									</button>
+								</template>
 							</div>
 
 							<div class="file-actions" v-if="translatedFileUrl === false && loadingFileTranslation === false">
@@ -577,9 +594,10 @@
 								<div class="file-job-head">
 									<span class="file-job-file" :title="inputFile.name">[[ inputFile.name ]]</span>
 									<span class="file-job-status" :class="fileJobPaused ? 'is-paused' : 'is-running'">
-										<i class="material-icons" aria-hidden="true">[[ fileJobPaused ? 'pause' : 'cached' ]]</i>
-										<span v-if="fileJobPaused">{{ _h("Paused") }}</span>
-										<span v-else>{{ _h("Translating") }}</span>
+									<i class="material-icons" aria-hidden="true">[[ fileJobPaused ? 'pause' : 'cached' ]]</i>
+									<span v-if="fileJobPaused">{{ _h("Paused") }}</span>
+									<span v-else-if="fileJobPhase === 'assembly'">{{ _h("Building PDF") }}</span>
+									<span v-else>{{ _h("Translating") }}</span>
 									</span>
 								</div>
 								<div class="file-progress-track" :class="fileJobPaused ? 'is-paused' : ''">
@@ -806,6 +824,9 @@
 			</div>
 			<div class="footer-bottom">
 				{{ _h("Made with %(heart)s by %(contributors)s and powered by %(engine)s", heart='❤', contributors='<a href="https://github.com/LibreTranslate/LibreTranslate/graphs/contributors" target="_blank" rel="noopener noreferrer">%s</a>' % _h("%(libretranslate)s Contributors", libretranslate="LibreTranslate"), engine='<a href="https://github.com/argosopentech/argos-translate/" target="_blank" rel="noopener noreferrer">Argos Translate</a>') }}
+			</div>
+			<div class="footer-bottom">
+				Модифицировано агентством <a href="https://югспецсети.рф" target="_blank" rel="noopener noreferrer">ЮгСпецСети.РФ</a>
 			</div>
 		</div>
 	</footer>

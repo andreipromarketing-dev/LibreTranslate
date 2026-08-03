@@ -13,6 +13,7 @@ from html import unescape
 from timeit import default_timer
 
 import argostranslatefiles
+from argostranslate import settings as argos_settings
 from argostranslatefiles import get_supported_formats
 from flask import Blueprint, Flask, Response, abort, jsonify, render_template, request, send_file, url_for, make_response
 from flask_babel import Babel
@@ -520,7 +521,8 @@ def create_app(args):
             get_api_key_link=args.get_api_key_link,
             api_secret=api_secret,
             bogus_api_secret=bogus_api_secret,
-            under_attack=args.under_attack), content_type='application/javascript; charset=utf-8')
+            under_attack=args.under_attack,
+            args=args), content_type='application/javascript; charset=utf-8')
 
       if args.require_api_key_secret:
         response.headers['Last-Modified'] = http_date(datetime.now())
@@ -1003,6 +1005,9 @@ def create_app(args):
         source_lang = iso2model(request.form.get("source"))
         target_lang = iso2model(request.form.get("target"))
         codec = request.form.get("codec", "auto")
+        pdf_backend = request.form.get("pdf_backend") or args.pdf_backend
+        if pdf_backend not in ("pymupdf", "pdf-inspector", "auto"):
+            pdf_backend = args.pdf_backend
         file = request.files['file']
         char_limit = get_char_limit(args.char_limit, api_keys_db)
 
@@ -1046,7 +1051,7 @@ def create_app(args):
         if char_limit > 0:
             request.req_cost = max(1, int(os.path.getsize(filepath) / char_limit))
 
-        def run_file_translation(job_id, source_lang_code, target_lang_code, filepath, codec):
+        def run_file_translation(job_id, source_lang_code, target_lang_code, filepath, codec, pdf_backend):
             try:
                 if source_lang_code == "auto":
                     if text_file.is_text_file(filepath):
@@ -1099,14 +1104,14 @@ def create_app(args):
                     return
 
                 progress_translation = ProgressTranslation(translation, job)
-                progress.run_file_job(job_id, progress_translation, filepath, codec)
+                progress.run_file_job(job_id, progress_translation, filepath, codec, pdf_backend)
             except Exception as e:
                 progress.fail_job(job_id, e)
 
         job = job_store.create(str(uuid.uuid4()))
         threading.Thread(
             target=run_file_translation,
-            args=(job.job_id, source_lang, target_lang, filepath, codec),
+            args=(job.job_id, source_lang, target_lang, filepath, codec, pdf_backend),
             daemon=True,
         ).start()
         
@@ -1679,6 +1684,10 @@ def create_app(args):
         if not locale or locale not in get_available_locale_codes():
             locale = 'en'
         translations = get_translations_for_locale(locale)
+        if not translations and locale != 'ru':
+            # Fallback: if the requested locale has no .po strings, serve the
+            # Russian UI strings so the interface is not empty/English-only.
+            translations = get_translations_for_locale('ru')
         return jsonify(translations)
 
     @bp.route("/frontend/settings")
@@ -1744,6 +1753,7 @@ def create_app(args):
             {
                 "charLimit": args.char_limit,
                 "frontendTimeout": args.frontend_timeout,
+                "beamSize": argos_settings.beam_size,
                 "apiKeys": args.api_keys,
                 "keyRequired": bool(args.api_keys and args.require_api_key_origin),
                 "suggestions": args.suggestions,
@@ -1795,15 +1805,27 @@ def create_app(args):
         if not data:
             abort(400, description=_("Invalid JSON"))
         
-        pdf_backend = data.get('pdfBackend')
-        if pdf_backend not in ['pymupdf', 'pdf-inspector', 'auto']:
+        pdf_backend = data.get('pdfBackend') or data.get('pdf_backend')
+        if pdf_backend not in [None, 'pymupdf', 'pdf-inspector', 'auto']:
             abort(400, description=_("Invalid pdfBackend value"))
         
         # Note: This only updates the runtime setting. For persistence across restarts,
         # the --pdf-backend CLI argument or environment variable LT_PDF_BACKEND should be used.
-        args.pdf_backend = pdf_backend
+        if pdf_backend is not None:
+            args.pdf_backend = pdf_backend
         
-        return jsonify({"success": True, "pdfBackend": pdf_backend})
+        beam_size = data.get('beamSize') or data.get('beam_size')
+        if beam_size is not None:
+            try:
+                beam_size = int(beam_size)
+            except (TypeError, ValueError):
+                abort(400, description=_("Invalid beamSize value"))
+            if beam_size not in [4, 6, 8]:
+                abort(400, description=_("Invalid beamSize value"))
+            argos_settings.beam_size = beam_size
+            argos_settings.set_setting("ARGOS_BEAM_SIZE", str(beam_size))
+        
+        return jsonify({"success": True, "pdfBackend": args.pdf_backend, "beamSize": argos_settings.beam_size})
 
     @bp.post("/suggest")
     def suggest():

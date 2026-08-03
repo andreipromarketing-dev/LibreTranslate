@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', function(){
             translatedFileUrl: false,
             fileJobId: false,
             fileJobPaused: false,
+            fileJobPhase: "translate",
             fileProgress: 0,
             fileProgressText: "",
             fileSpeedText: "",
@@ -55,6 +56,7 @@ document.addEventListener('DOMContentLoaded', function(){
             saveDirectoryName: "",
             saveDirectoryError: "",
             lastTranslatedFileUrl: "",
+            parsingPdf: false,
 
             // Abbreviation & Glossary
             showTab: 'translate',  // 'translate' | 'abbreviations' | 'glossary' | 'settings'
@@ -64,6 +66,7 @@ document.addEventListener('DOMContentLoaded', function(){
             
             // PDF Backend
             pdfBackend: "{{ args.pdf_backend | default('pymupdf') }}",
+            beamSize: 8,
             availablePdfBackends: [
                 { value: 'pymupdf', label: 'PyMuPDF (default)' },
                 { value: 'auto', label: 'Auto (smart routing)' },
@@ -97,6 +100,7 @@ jsonPasteText: { abbr: '', glossary: '' },
 
             // PDF Backend
             pdfBackend: "{{ args.pdf_backend | default('pymupdf') }}",
+            beamSize: 8,
             availablePdfBackends: [
                 { value: 'pymupdf', label: 'PyMuPDF (default)' },
                 { value: 'auto', label: 'Auto (smart routing)' },
@@ -141,6 +145,9 @@ jsonPasteText: { abbr: '', glossary: '' },
                     self.suggestions = self.settings.suggestions;
                     self.supportedFilesFormat = self.settings.supportedFilesFormat;
                     self.filesTranslation = self.settings.filesTranslation;
+                    if (self.settings.beamSize) {
+                        self.beamSize = self.settings.beamSize;
+                    }
                     self.frontendTimeout = self.settings.frontendTimeout;
                     if (self.settings.supportedFileCodecs && self.settings.supportedFileCodecs.length) {
                         self.fileCodecs = self.settings.supportedFileCodecs;
@@ -232,6 +239,9 @@ jsonPasteText: { abbr: '', glossary: '' },
             },
             inputFileSizeText: function() {
                 return this.inputFile ? formatBytes(this.inputFile.size) : "";
+            },
+            isPdfFile: function() {
+                return this.inputFile && this.inputFile.name.toLowerCase().endsWith('.pdf');
             },
             isHtml: function(){
                 return htmlRegex.test(this.inputText);
@@ -582,7 +592,7 @@ updateQueryParam: function (key, value) {
                     return true;
                 }
             },
-            translateFile: function(e) {
+            translateFile: function(e, forcedBackend) {
                 e.preventDefault();
                 if (this.disableInput) return;
 
@@ -598,6 +608,7 @@ updateQueryParam: function (key, value) {
                 data.append("api_key", this.apiKey);
                 if (self.apiSecret) data.append("secret", self.apiSecret);
                 data.append("codec", this.fileCodec);
+                data.append("pdf_backend", forcedBackend || this.pdfBackend);
 
                 this.loadingFileTranslation = true
                 this.fileProgress = 0
@@ -605,6 +616,7 @@ updateQueryParam: function (key, value) {
                 this.fileSpeedText = ""
                 this.fileEtaText = ""
                 this.fileJobPaused = false
+                this.fileJobPhase = "translate"
 
                 translateFileRequest.onload = function()  {
                     if (translateFileRequest.readyState === 4 && translateFileRequest.status === 200) {
@@ -648,6 +660,96 @@ updateQueryParam: function (key, value) {
 
                 translateFileRequest.send(data);
                 Notification.requestPermission();
+            },
+            parsePdfToMarkdown: function() {
+                let self = this;
+                if (this.disableInput || !this.inputFile) return;
+
+                self.parsingPdf = true;
+                let parseRequest = new XMLHttpRequest();
+                parseRequest.open("POST", BaseUrl + "/parse_pdf", true);
+
+                let data = new FormData();
+                data.append("file", this.inputFile);
+                data.append("api_key", this.apiKey);
+                if (self.apiSecret) data.append("secret", self.apiSecret);
+
+                parseRequest.onload = function() {
+                    self.parsingPdf = false;
+                    if (parseRequest.readyState === 4 && parseRequest.status === 200) {
+                        try {
+                            let res = JSON.parse(this.response);
+                            if (res.markdown) {
+                                const baseName = self.inputFile.name.replace(/\.pdf$/i, '') || "document";
+                                self._saveMarkdownBlob(res.markdown, baseName + '.md');
+                                handleNotification("Parse Complete", {{ _e("Markdown saved") }});
+                            } else if (res.pdf_type) {
+                                self.error = {{ _e("PDF requires OCR:") }} + " " + res.pdf_type;
+                                handleNotification("Parse Failed", self.error);
+                            } else {
+                                throw new Error({{ _e("No markdown in response") }});
+                            }
+                        } catch(e) {
+                            self.error = e.message;
+                            handleNotification("Parse Failed", e.message);
+                        }
+                    } else {
+                        let res = JSON.parse(this.response);
+                        self.error = res.error || {{ _e("Unknown error") }};
+                        handleNotification("Parse Failed", self.error);
+                    }
+                };
+
+                parseRequest.onerror = function() {
+                    self.parsingPdf = false;
+                    const message = {{ _e("Cannot load %(url)s", url=url_prefix + "/parse_pdf") }};
+                    self.error = message;
+                    handleNotification("Parse Failed", message);
+                };
+
+                parseRequest.send(data);
+            },
+            translateMarkdown: function(e) {
+                // Translate the PDF via the pdf-inspector backend, producing a
+                // translated .md file that the normal job/save flow delivers.
+                this.translateFile(e, 'pdf-inspector');
+            },
+            _saveMarkdownBlob: function(content, fileName) {
+                let self = this;
+                const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+
+                if (self.saveDirHandle) {
+                    self.saveDirHandle.getFileHandle(fileName, { create: true })
+                        .then(function(fileHandle) { return fileHandle.createWritable(); })
+                        .then(function(writable) {
+                            return writable.write(blob).then(function() { return writable.close(); });
+                        })
+                        .then(function() {
+                            self.saveDirectoryError = "";
+                        })
+                        .catch(function() {
+                            self.saveDirectoryError = {{ _e("Could not write to the selected folder, the file was downloaded instead.") }};
+                            self._forceBlobDownload(URL.createObjectURL(blob), fileName);
+                        });
+                } else if (window.showSaveFilePicker) {
+                    window.showSaveFilePicker({
+                        suggestedName: fileName,
+                        types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md'] } }]
+                    }).then(function(handle) {
+                        return handle.createWritable().then(function(writable) {
+                            return writable.write(blob).then(function() {
+                                writable.close();
+                                handleNotification("Saved", {{ _e("Saved to") }} + " " + handle.name);
+                            });
+                        });
+                    }).catch(function(err) {
+                        if (err.name !== 'AbortError') {
+                            self._forceBlobDownload(URL.createObjectURL(blob), fileName);
+                        }
+                    });
+                } else {
+                    self._forceBlobDownload(URL.createObjectURL(blob), fileName);
+                }
             },
             pollFileJob: function() {
                 let self = this;
@@ -722,6 +824,7 @@ updateQueryParam: function (key, value) {
             updateFileProgress: function(job) {
                 this.fileProgress = Math.round(job.progress || 0);
                 this.fileProgressText = String(this.fileProgress) + "%";
+                this.fileJobPhase = job.phase || 'translate';
                 this.fileSpeedText = job.speed ? formatFileSpeed(job.speed) : "";
                 this.fileEtaText = (job.eta != null) ? formatFileEta(job.eta) : "";
             },
@@ -884,6 +987,8 @@ updateQueryParam: function (key, value) {
                 }
                 handleNotification("Translation Complete", msg);
                 
+                playCompletionSound();
+                
                 self._saveInProgress = false;
             },
             
@@ -954,11 +1059,7 @@ updateQueryParam: function (key, value) {
                 // Revoke after a delay to ensure download starts
                 setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 10000);
                 handleNotification("Saved", {{ _e("File downloaded to your default Downloads folder") }});
-            }
-        }
-    });
-});
-
+            },
 // === ABBREVIATION & GLOSSARY METHODS ===
 
 loadTabData: function() {
@@ -1014,25 +1115,25 @@ saveAbbr: function() {
         if (r.ok) {
             self.closeAbbrModal();
             self.loadAbbreviations();
-            handleNotification("Success", self.editingAbbr ? "{{ _e('Abbreviation updated') }}" : "{{ _e('Abbreviation added') }}");
+            handleNotification("Success", self.editingAbbr ? {{ _e('Abbreviation updated') }} : {{ _e('Abbreviation added') }});
         } else {
-            handleNotification("Error", "{{ _e('Failed to save') }}");
+            handleNotification("Error", {{ _e('Failed to save') }});
         }
     });
 },
 
 deleteAbbr: function(entry) {
-    if (!confirm("{{ _e('Delete this abbreviation?') }}")) return;
+    if (!confirm({{ _e('Delete this abbreviation?') }})) return;
     let self = this;
     fetch(BaseUrl + "/abbreviations/" + entry.id, { method: "DELETE" })
-        .then(r => { if (r.ok) { self.loadAbbreviations(); handleNotification("Success", "{{ _e('Abbreviation deleted') }}"); } });
+        .then(r => { if (r.ok) { self.loadAbbreviations(); handleNotification("Success", {{ _e('Abbreviation deleted') }}); } });
 },
 
 confirmClearAbbr: function() {
-    if (!confirm("{{ _e('Delete ALL abbreviations? This cannot be undone.') }}")) return;
+    if (!confirm({{ _e('Delete ALL abbreviations? This cannot be undone.') }})) return;
     let self = this;
     fetch(BaseUrl + "/abbreviations/clear", { method: "POST" })
-        .then(r => { if (r.ok) { self.loadAbbreviations(); handleNotification("Success", "{{ _e('All abbreviations cleared') }}"); } });
+        .then(r => { if (r.ok) { self.loadAbbreviations(); handleNotification("Success", {{ _e('All abbreviations cleared') }}); } });
 },
 
 exportAbbreviationsCSV: function() { window.location.href = BaseUrl + "/abbreviations/export"; },
@@ -1192,25 +1293,25 @@ saveGlossary: function() {
         if (r.ok) {
             self.closeGlossaryModal();
             self.loadGlossary();
-            handleNotification("Success", self.editingGlossary ? "{{ _e('Terminology updated') }}" : "{{ _e('Terminology added') }}");
+            handleNotification("Success", self.editingGlossary ? {{ _e('Terminology updated') }} : {{ _e('Terminology added') }});
         } else {
-            handleNotification("Error", "{{ _e('Failed to save') }}");
+            handleNotification("Error", {{ _e('Failed to save') }});
         }
     });
 },
 
 deleteGlossary: function(entry) {
-    if (!confirm("{{ _e('Delete this terminology entry?') }}")) return;
+    if (!confirm({{ _e('Delete this terminology entry?') }})) return;
     let self = this;
     fetch(BaseUrl + "/glossary/" + entry.id, { method: "DELETE" })
-        .then(r => { if (r.ok) { self.loadGlossary(); handleNotification("Success", "{{ _e('Terminology deleted') }}"); } });
+        .then(r => { if (r.ok) { self.loadGlossary(); handleNotification("Success", {{ _e('Terminology deleted') }}); } });
 },
 
 confirmClearGlossary: function() {
-    if (!confirm("{{ _e('Delete ALL terminology? This cannot be undone.') }}")) return;
+    if (!confirm({{ _e('Delete ALL terminology? This cannot be undone.') }})) return;
     let self = this;
     fetch(BaseUrl + "/glossary/clear", { method: "POST" })
-        .then(r => { if (r.ok) { self.loadGlossary(); handleNotification("Success", "{{ _e('All terminology cleared') }}"); } });
+        .then(r => { if (r.ok) { self.loadGlossary(); handleNotification("Success", {{ _e('All terminology cleared') }}); } });
 },
 
 exportGlossaryCSV: function() { window.location.href = BaseUrl + "/glossary/export"; },
@@ -1220,6 +1321,21 @@ exportGlossaryCSV: function() { window.location.href = BaseUrl + "/glossary/expo
             let instruction = `...`; // промпт для глоссария
             navigator.clipboard.writeText(instruction).then(() => {
                 handleNotification("Copied", "{{ _h('JSON instruction copied to clipboard') }}");
+            });
+        },
+
+        saveBeamSize: function() {
+            let self = this;
+            fetch(BaseUrl + "/frontend/settings", {
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ beamSize: self.beamSize })
+            }).then(r => {
+                if (r.ok) {
+                    handleNotification("Success", "{{ _h('Translation quality saved') }}");
+                } else {
+                    handleNotification("Error", "{{ _h('Failed to save translation quality') }}");
+                }
             });
         },
 
@@ -1247,6 +1363,9 @@ exportGlossaryCSV: function() { window.location.href = BaseUrl + "/glossary/expo
 importGlossaryJson: function() {
     this.jsonImportMode.glossary = true;
 },
+        }
+    });
+});
 
 /**
  * @param {object} self
@@ -1320,6 +1439,31 @@ function formatFileEta(seconds) {
     if (h > 0) return h + "h " + m + "m " + s + "s";
     if (m > 0) return m + "m " + s + "s";
     return s + "s";
+}
+
+function playCompletionSound() {
+    try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        var ctx = new AC();
+        var notes = [880, 1174.66, 1567.98];
+        var start = ctx.currentTime;
+        notes.forEach(function(freq, idx) {
+            var t = start + idx * 0.14;
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.45);
+        });
+        setTimeout(function() { ctx.close(); }, 2000);
+    } catch (e) { /* ignore */ }
 }
 
 function formatBytes(bytes) {
