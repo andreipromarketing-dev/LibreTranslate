@@ -24,7 +24,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.http import http_date
 from werkzeug.utils import secure_filename
 
-from libretranslate import flood, pdf_file, progress, remove_translated_files, scheduler, secret, security, storage, cache, text_file
+from libretranslate import flood, pdf_file, progress, remove_translated_files, scheduler, secret, security, storage, cache, text_file, document_file
 from libretranslate.language import model2iso, iso2model, detect_languages, improve_translation_formatting, get_language_with_fallback
 from libretranslate.locales import (
     _,
@@ -2236,6 +2236,8 @@ def create_app(args):
             if markdown is None:
                 abort(500, description=_("Failed to extract markdown from PDF"))
 
+            markdown = pdf_file._repair_if_needed(markdown)
+
             return jsonify({
                 "markdown": markdown,
                 "pdf_type": classification["pdf_type"],
@@ -2248,6 +2250,76 @@ def create_app(args):
         except Exception as e:
             logging.error(f"PDF parse error: {e}")
             abort(500, description=_("Cannot parse PDF: %(error)s", error=str(e)))
+        finally:
+            if os.path.isfile(filepath):
+                try:
+                    os.remove(filepath)
+                except OSError:
+                    pass
+
+    @bp.post("/parse_document")
+    @access_check
+    def parse_document():
+        """
+        Parse an office document (doc/docx/odt/rtf/epub/xls/xlsx/csv/ppt/pptx)
+        to Markdown without translation
+        ---
+        tags:
+          - translate
+        consumes:
+          - multipart/form-data
+        parameters:
+          - in: formData
+            name: file
+            type: file
+            required: true
+            description: Office document to parse
+        responses:
+          200:
+            description: Parsed document content
+            schema:
+              type: object
+              properties:
+                markdown:
+                  type: string
+                  description: Extracted Markdown content
+          400:
+            description: Invalid request
+          500:
+            description: Parse error
+        """
+        if args.disable_files_translation:
+            abort(400, description=_("Files translation are disabled on this server."))
+
+        if 'file' not in request.files:
+            abort(400, description=_("Invalid request: missing %(name)s parameter", name='file'))
+
+        file = request.files['file']
+        if file.filename == '':
+            abort(400, description=_("Invalid request: empty file"))
+
+        if not document_file.is_document_file(file.filename):
+            abort(400, description=_("Invalid request: unsupported document format"))
+
+        if not document_file.is_anydoc_available():
+            abort(501, description=_("anydoc backend not available. Install with: pip install firecrawl-anydoc"))
+
+        filename = str(uuid.uuid4()) + '.' + secure_filename(file.filename)
+        filepath = os.path.join(get_upload_dir(), filename)
+        file.save(filepath)
+
+        try:
+            markdown = document_file.extract_document_markdown(filepath)
+            markdown = pdf_file._repair_if_needed(markdown)
+            return jsonify({
+                "markdown": markdown,
+                "document_type": os.path.splitext(file.filename)[1].lower()
+            })
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(f"Document parse error: {e}")
+            abort(500, description=_("Cannot parse document: %(error)s", error=str(e)))
         finally:
             if os.path.isfile(filepath):
                 try:

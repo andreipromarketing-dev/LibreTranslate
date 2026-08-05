@@ -915,6 +915,14 @@ msgid "Markdown saved"
 msgstr "Markdown сохранен"
 
 #: libretranslate/templates/app.js.template:XXX
+msgid "Markdown saved to folder"
+msgstr "Markdown сохранен в папку"
+
+#: libretranslate/templates/app.js.template:XXX
+msgid "Markdown saved to Downloads"
+msgstr "Markdown сохранен в Загрузки"
+
+#: libretranslate/templates/app.js.template:XXX
 msgid "PDF requires OCR:"
 msgstr "PDF требует OCR:"
 

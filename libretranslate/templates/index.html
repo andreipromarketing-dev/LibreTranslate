@@ -565,6 +565,11 @@
 										<i class="material-icons" aria-hidden="true">translate</i> {{ _h("Translate Markdown") }}
 									</button>
 								</template>
+								<template v-else-if="isDocumentFile">
+									<button type="button" class="btn btn-outline" @click="parseDocumentToMarkdown" :disabled="parsingPdf">
+										<i class="material-icons" aria-hidden="true">description</i> {{ _h("Save Markdown") }}
+									</button>
+								</template>
 							</div>
 
 							<div class="file-actions" v-if="translatedFileUrl === false && loadingFileTranslation === false">

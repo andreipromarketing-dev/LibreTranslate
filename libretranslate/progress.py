@@ -6,6 +6,7 @@ import argostranslatefiles
 from argostranslate.translate import ITranslation
 
 from libretranslate import pdf_file, text_file
+from libretranslate import document_file
 from libretranslate.pdf_inspector_backend import (
     is_available as pdf_inspector_available, classify_pdf, extract_markdown
 )
@@ -264,8 +265,43 @@ def _translate_pdf_to_markdown(translation: ITranslation, filepath: str) -> str:
     if not markdown:
         raise Exception("Failed to extract markdown from PDF")
 
+    markdown = pdf_file._repair_if_needed(markdown)
+
     # ProgressTranslation.translate() expands abbreviations and applies the
     # glossary for the current language pair, then reports progress.
+    translated_markdown = translation.translate(markdown)
+
+    from libretranslate.app import get_upload_dir
+    upload_dir = get_upload_dir()
+    os.makedirs(upload_dir, exist_ok=True)
+    base = os.path.splitext(os.path.basename(filepath))[0]
+    out_name = str(uuid.uuid4()) + "_" + base + ".md"
+    out_path = os.path.join(upload_dir, out_name)
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(translated_markdown)
+    return out_path
+
+
+def _translate_document_to_markdown(translation: ITranslation, filepath: str) -> str:
+    """Convert an office document (doc/docx/odt/rtf/epub/xls/xlsx/csv/ppt/pptx)
+    to Markdown via anydoc and translate it.
+
+    The translated Markdown is written into the upload directory so the
+    regular ``download_file`` endpoint can serve it as ``*_translated.md``.
+    """
+    import uuid
+
+    if not document_file.is_anydoc_available():
+        raise RuntimeError(
+            "anydoc backend not available. Install with: pip install firecrawl-anydoc"
+        )
+
+    markdown = document_file.extract_document_markdown(filepath)
+    if not markdown:
+        raise Exception("Failed to extract markdown from document")
+
+    markdown = pdf_file._repair_if_needed(markdown)
+
     translated_markdown = translation.translate(markdown)
 
     from libretranslate.app import get_upload_dir
@@ -307,6 +343,11 @@ def run_file_job(job_id: str, translation: ITranslation, filepath: str, codec: s
                 translated_file_path = pdf_file.translate_pdf(translation, filepath)
         elif pdf_file.is_pdf_file(filepath):
             translated_file_path = pdf_file.translate_pdf(translation, filepath)
+        elif document_file.is_document_file(filepath) and document_file.is_anydoc_available():
+            # anydoc backend: extract Markdown from the office document and
+            # translate it. Falls back to the generic pipeline when anydoc is
+            # not installed.
+            translated_file_path = _translate_document_to_markdown(translation, filepath)
         elif text_file.is_text_file(filepath):
             translated_file_path = text_file.translate_text_file(
                 translation, filepath, codec

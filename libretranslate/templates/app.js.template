@@ -243,6 +243,11 @@ jsonPasteText: { abbr: '', glossary: '' },
             isPdfFile: function() {
                 return this.inputFile && this.inputFile.name.toLowerCase().endsWith('.pdf');
             },
+            isDocumentFile: function() {
+                if (!this.inputFile) return false;
+                var n = this.inputFile.name.toLowerCase();
+                return /\.(docx?|odt|rtf|epub|xlsx?|csv|pptx?)$/.test(n);
+            },
             isHtml: function(){
                 return htmlRegex.test(this.inputText);
             },
@@ -597,6 +602,12 @@ updateQueryParam: function (key, value) {
                 if (this.disableInput) return;
 
                 let self = this;
+                if (this.filePollTimer) {
+                    clearInterval(this.filePollTimer);
+                    this.filePollTimer = false;
+                }
+                this._jobFinished = false;
+                this._saveInProgress = false;
                 let translateFileRequest = new XMLHttpRequest();
 
                 translateFileRequest.open("POST", BaseUrl + "/translate_file", true);
@@ -682,7 +693,6 @@ updateQueryParam: function (key, value) {
                             if (res.markdown) {
                                 const baseName = self.inputFile.name.replace(/\.pdf$/i, '') || "document";
                                 self._saveMarkdownBlob(res.markdown, baseName + '.md');
-                                handleNotification("Parse Complete", {{ _e("Markdown saved") }});
                             } else if (res.pdf_type) {
                                 self.error = {{ _e("PDF requires OCR:") }} + " " + res.pdf_type;
                                 handleNotification("Parse Failed", self.error);
@@ -709,6 +719,50 @@ updateQueryParam: function (key, value) {
 
                 parseRequest.send(data);
             },
+            parseDocumentToMarkdown: function() {
+                let self = this;
+                if (this.disableInput || !this.inputFile) return;
+
+                self.parsingPdf = true;
+                let parseRequest = new XMLHttpRequest();
+                parseRequest.open("POST", BaseUrl + "/parse_document", true);
+
+                let data = new FormData();
+                data.append("file", this.inputFile);
+                data.append("api_key", this.apiKey);
+                if (self.apiSecret) data.append("secret", self.apiSecret);
+
+                parseRequest.onload = function() {
+                    self.parsingPdf = false;
+                    if (parseRequest.readyState === 4 && parseRequest.status === 200) {
+                        try {
+                            const res = JSON.parse(parseRequest.response);
+                            if (res.markdown) {
+                                const baseName = (self.inputFile.name || "document").replace(/\.[^.]+$/, "");
+                                _saveMarkdownBlob.call(self, res.markdown, baseName + '.md');
+                            } else {
+                                throw new Error({{ _e("No markdown in response") }});
+                            }
+                        } catch(e) {
+                            self.error = e.message;
+                            handleNotification("Parse Failed", e.message);
+                        }
+                    } else {
+                        let res = JSON.parse(parseRequest.response);
+                        self.error = res.error || {{ _e("Unknown error") }};
+                        handleNotification("Parse Failed", self.error);
+                    }
+                };
+
+                parseRequest.onerror = function() {
+                    self.parsingPdf = false;
+                    const message = {{ _e("Cannot load %(url)s", url=url_prefix + "/parse_document") }};
+                    self.error = message;
+                    handleNotification("Parse Failed", message);
+                };
+
+                parseRequest.send(data);
+            },
             translateMarkdown: function(e) {
                 // Translate the PDF via the pdf-inspector backend, producing a
                 // translated .md file that the normal job/save flow delivers.
@@ -726,10 +780,12 @@ updateQueryParam: function (key, value) {
                         })
                         .then(function() {
                             self.saveDirectoryError = "";
+                            handleNotification("Markdown Saved", {{ _e("Markdown saved to folder") }} + " " + (self.saveDirectoryName || fileName));
                         })
                         .catch(function() {
                             self.saveDirectoryError = {{ _e("Could not write to the selected folder, the file was downloaded instead.") }};
                             self._forceBlobDownload(URL.createObjectURL(blob), fileName);
+                            handleNotification("Markdown Saved", {{ _e("Markdown saved to Downloads") }});
                         });
                 } else if (window.showSaveFilePicker) {
                     window.showSaveFilePicker({
@@ -745,10 +801,12 @@ updateQueryParam: function (key, value) {
                     }).catch(function(err) {
                         if (err.name !== 'AbortError') {
                             self._forceBlobDownload(URL.createObjectURL(blob), fileName);
+                            handleNotification("Markdown Saved", {{ _e("Markdown saved to Downloads") }});
                         }
                     });
                 } else {
                     self._forceBlobDownload(URL.createObjectURL(blob), fileName);
+                    handleNotification("Markdown Saved", {{ _e("Markdown saved to Downloads") }});
                 }
             },
             pollFileJob: function() {
@@ -761,6 +819,8 @@ updateQueryParam: function (key, value) {
                         self.filePollTimer = false;
                     }
                 };
+
+                let finished = false;
 
                 const poll = function() {
                     let req = new XMLHttpRequest();
@@ -778,6 +838,9 @@ updateQueryParam: function (key, value) {
                                 self.fileJobPaused = true;
                                 return;
                             }
+
+                            if (finished) return;
+                            finished = true;
 
                             stopPolling();
                             self.loadingFileTranslation = false;
@@ -935,32 +998,8 @@ updateQueryParam: function (key, value) {
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                
-                // 2. NATIVE "Save As..." dialog (Chrome/Edge) - runs in parallel, non-blocking
-                if (window.showSaveFilePicker) {
-                    fetch(url)
-                        .then(function(r) { return r.blob(); })
-                        .then(function(blob) {
-                            return window.showSaveFilePicker({
-                                suggestedName: fileName,
-                                types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
-                            }).then(function(handle) {
-                                return handle.createWritable().then(function(writable) {
-                                    return writable.write(blob).then(function() {
-                                        writable.close();
-                                        handleNotification("Saved", {{ _e("Saved to") }} + " " + handle.name);
-                                    });
-                                });
-                            }).catch(function(err) {
-                                if (err.name !== 'AbortError') {
-                                    console.warn("Save dialog failed:", err);
-                                }
-                            });
-                        })
-                        .catch(function() {});
-                }
-                
-                // 3. SAVE TO USER-SELECTED FOLDER (if any) - silent background save
+
+                // 2. SAVE TO USER-SELECTED FOLDER (if any) - silent background save
                 if (self.saveDirHandle) {
                     fetch(url)
                         .then(function(r) { return r.blob(); })
